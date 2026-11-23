@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>十球投篮 · AI 直播间版 (Goofy Hoops Studio)</title>
+<meta name="description" content="复刻 Goofy Fish Ten Balls 投篮游戏，内置校园运动美女、爱投篮的哥哥等 AI 角色自动游玩投篮，搭配直播小窗、键盘操作模拟与弹幕互动。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Balsamiq+Sans:wght@400;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="gameCanvas" aria-label="十球投篮游戏画布"></canvas>
+
+<!-- 弹幕层 -->
+<div id="danmakuLayer" aria-hidden="true"></div>
+
+<!-- 左上角计分板（致敬 Goofy Fish Ten Balls 极简手绘风格） -->
+<header id="hud" class="hidden">
+  <div class="board panel">
+    <div class="tally">
+      <div class="stat">
+        <div id="score">0</div>
+        <div class="label">得分</div>
+      </div>
+      <div class="stat">
+        <div id="best">0</div>
+        <div class="label">最高分</div>
+      </div>
+      <div class="stat stat-persona">
+        <div id="hudPersonaName">林小夏</div>
+        <div class="label" id="hudModeTag">AI 自动投篮</div>
+      </div>
+    </div>
+    <div class="ballrow">
+      <div id="tracker"></div>
+      <div class="ballrow-meta">
+        <span class="label" id="ballLabel">第 1 / 10 球</span>
+        <span class="label" id="aiTargetHint"></span>
+      </div>
+    </div>
+  </div>
+  <div id="streak"></div>
+</header>
+
+<!-- 顶部右侧 直播与角色控制条 -->
+<nav id="topControls" aria-label="直播与角色控制">
+  <div class="control-pill panel">
+    <label class="ctrl-group" title="切换场上角色 / AI人格">
+      <span class="ctrl-label">角色</span>
+      <select id="personaSelect" aria-label="选择角色">
+        <option value="campus_girl">🏀 校园运动美女 · 林小夏</option>
+        <option value="basketball_bro">🔥 爱投篮的哥哥 · 陈默</option>
+        <option value="sports_boy">⚡ 元气体育生 · 阿凯</option>
+        <option value="chill_scholar">👓 佛系学霸 · 晚晚</option>
+        <option value="human">🎮 我自己玩（手动）</option>
+      </select>
+    </label>
+    <div class="ctrl-divider"></div>
+    <button class="ctrl-btn active" id="btnAutoPlay" title="切换 AI 自动游玩 / 手动接管">
+      <span class="dot-ind"></span>
+      <span id="autoPlayText">AI托管中</span>
+    </button>
+    <button class="ctrl-btn active" id="btnAutoLoop" title="一轮结束后自动开启下一轮（适合直播挂机）">
+      连播
+    </button>
+    <button class="ctrl-btn active" id="btnPipToggle" title="显示/隐藏主播直播小窗">
+      直播窗
+    </button>
+    <button class="ctrl-btn" id="btnDanmakuToggle" title="开启/关闭弹幕聊天">
+      弹幕
+    </button>
+    <button class="ctrl-btn" id="btnTtsToggle" title="开启/关闭主播语音播报">
+      语音
+    </button>
+    <button class="ctrl-btn active" id="btnSoundToggle" title="开启/关闭游戏与机械键盘音效">
+      音效
+    </button>
+    <button class="ctrl-btn" id="btnStreamMode" title="一键进入/退出 OBS 纯净直播布局">
+      纯净
+    </button>
+  </div>
+</nav>
+
+<!-- 底部操作提示 -->
+<div id="hint" class="hidden">
+  <span id="hintText">长按蓄力，松手投篮</span>
+  <span class="kbd-only">或按</span>
+  <kbd class="kbd-only">Space</kbd>
+</div>
+
+<!-- 主播直播小窗（可拖拽、可调大小，显示校园运动真人美女操作键盘模拟玩游戏） -->
+<aside id="streamerPip" class="pip-window" aria-label="AI主播直播小窗">
+  <div class="pip-header" id="pipDragHandle">
+    <div class="pip-live-badge">
+      <span class="live-dot"></span>
+      <span>LIVE</span>
+    </div>
+    <div class="pip-title-wrap">
+      <span class="pip-name" id="pipName">林小夏 · 校园运动直播间</span>
+      <span class="pip-viewers" id="pipViewers">👁 2,418</span>
+    </div>
+    <div class="pip-actions">
+      <button class="pip-icon-btn" id="pipUploadBtn" title="上传自定义真人主播照片">📷</button>
+      <button class="pip-icon-btn" id="pipSizeBtn" title="切换小窗大小">⤢</button>
+      <button class="pip-icon-btn" id="pipCloseBtn" title="收起小窗">✕</button>
+    </div>
+    <input type="file" id="pipPhotoInput" accept="image/*" hidden>
+  </div>
+
+  <!-- 摄像头画面区域 -->
+  <div class="pip-viewport" id="pipViewport">
+    <!-- 实时照片层（多表情/动作帧切换） -->
+    <div class="cam-stage" id="camStage" data-state="idle">
+      <img id="camImgIdle" class="cam-frame active" alt="主播待机操作键盘画面">
+      <img id="camImgPress" class="cam-frame" alt="主播专注按空格蓄力画面">
+      <img id="camImgCheer" class="cam-frame" alt="主播进球欢呼画面">
+      <img id="camImgMiss" class="cam-frame" alt="主播失误表情画面">
+      <!-- 当图片加载中或用户切换无图角色时的实时高精度拟真摄像头画布 -->
+      <canvas id="camFallbackCanvas" class="cam-fallback"></canvas>
+
+      <!-- 镜头自然景深微光 & 顶部状态条 -->
+      <div class="cam-vignette"></div>
+      <div class="cam-top-overlay">
+        <span class="cam-status-chip" id="camActionChip">准备瞄准</span>
+        <div class="audio-bars" id="audioBars" aria-hidden="true">
+          <span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <!-- 主播实时字幕气泡 -->
+      <div class="cam-subtitle" id="camSubtitle">
+        大家好呀！今天挑战十球投篮，看看能拿几个空心～
+      </div>
+    </div>
+  </div>
+
+  <!-- 迷你机械键盘实况显示器（同步显示主播按压空格键操作） -->
+  <div class="pip-keyboard-deck">
+    <div class="kb-top-row">
+      <div class="kb-cluster">
+        <span class="mini-key" id="mkW">W</span>
+        <span class="mini-key" id="mkA">A</span>
+        <span class="mini-key" id="mkS">S</span>
+        <span class="mini-key" id="mkD">D</span>
+      </div>
+      <div class="kb-telemetry">
+        <span class="kb-meter-pill">
+          力度 <strong id="kbPowerVal">0%</strong>
+        </span>
+        <span class="kb-meter-pill">
+          按压 <strong id="kbHoldVal">0ms</strong>
+        </span>
+      </div>
+      <span class="mini-key mini-key-r" id="mkR" title="重开快捷键">R</span>
+    </div>
+
+    <div class="kb-space-wrap">
+      <div class="mini-spacebar" id="mkSpace">
+        <div class="space-fill" id="kbSpaceFill"></div>
+        <div class="space-label">
+          <span class="space-icon">⌨</span>
+          <span id="kbSpaceText">SPACE · 空格蓄力投篮</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- 直播间弹幕聊天面板（可展开/收起） -->
+<section id="chatPanel" class="chat-panel panel collapsed" aria-label="直播间弹幕互动">
+  <div class="chat-header">
+    <span>💬 直播间互动</span>
+    <span class="chat-count" id="chatHotTag">热度 9.8w</span>
+  </div>
+  <div class="chat-messages" id="chatMessages"></div>
+  <form class="chat-form" id="chatForm">
+    <input type="text" id="chatInput" placeholder="发条弹幕给主播打气..." maxlength="40" autocomplete="off">
+    <button type="submit">发送</button>
+  </form>
+</section>
+
+<!-- 纯净模式下右上角低调退出按钮 -->
+<button id="exitStreamBtn" class="panel" title="退出纯净直播模式">退出纯净模式</button>
+
+<!-- 开始 / 结算弹窗 -->
+<div id="overlay" class="on">
+  <div class="card show" id="startCard">
+    <div class="card-head-row">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="8.5"/>
+          <path d="M3.8 10c5.2 1.8 11.2 1.8 16.4 0"/>
+          <path d="M12 3.5c-2.8 5.2-2.8 11.8 0 17"/>
+        </svg>
+      </div>
+      <span class="chip">Goofy Hoops 直播复刻</span>
+    </div>
+    <h1 class="title">十球投篮</h1>
+    <div class="keys"><kbd>长按</kbd> 蓄力，<kbd>松手</kbd> 出手 · 支持 <kbd>AI 自动打球</kbd></div>
+    <p class="tag">空心入网得 3 分，普通进球 2 分。连中 3 球翻倍，连中 6 球三倍积分！</p>
+
+    <div class="persona-grid" id="startPersonaGrid"></div>
+
+    <div class="actions">
+      <button class="btn primary" id="playBtn">
+        <span id="playBtnText">开始 AI 直播投篮</span>
+        <kbd class="kbd-only">Space</kbd>
+      </button>
+    </div>
+    <div class="foot" id="startFoot"></div>
+  </div>
+
+  <div class="card" id="endCard">
+    <div class="row">
+      <div class="label" id="endRoundTitle">本轮结束</div>
+      <span class="chip" id="endChip" style="display:none">新纪录</span>
+    </div>
+    <div class="result">
+      <div>
+        <span id="endScore">0</span>
+        <div class="label">总得分</div>
+      </div>
+      <div>
+        <div id="stAcc">0%</div>
+        <div class="label">命中率</div>
+      </div>
+      <div>
+        <div id="stSwish">0</div>
+        <div class="label">空心</div>
+      </div>
+    </div>
+    <div class="shots" id="endShots"></div>
+    <div class="end-comment" id="endComment"></div>
+    <div class="actions">
+      <button class="btn primary" id="againBtn">
+        <span id="againBtnText">再来一轮</span>
+        <kbd class="kbd-only">Space</kbd>
+      </button>
+      <button class="btn ghost" id="shareBtn" aria-label="下载战绩海报" title="下载战绩海报">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+        </svg>
+      </button>
+    </div>
+    <div class="foot" id="endFoot"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

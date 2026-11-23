@@ -1,0 +1,1811 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>十球投篮 · AI 直播间版 (Goofy Hoops Studio)</title>
+<style>
+  :root {
+    --paper: #ffffff;
+    --card: #ffffff;
+    --ink: #1f2329;
+    --muted: #6e737b;
+    --soft: #9ca3af;
+    --faint: #d4d4d4;
+    --line: #ededed;
+    --dot: rgba(31, 41, 55, 0.13);
+    --chip: #f4f4f5;
+    --ring: rgba(0, 0, 0, 0.07);
+    --butter: #fde68a;
+    --butter-hi: #fcd34d;
+    --butter-soft: #fef3c7;
+    --umber: #78350f;
+    --amber: #b45309;
+    --live-red: #ef4444;
+    --pip-bg: #15171c;
+    --pip-border: rgba(255, 255, 255, 0.1);
+    --font: ui-rounded, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    color: var(--ink);
+    overflow: hidden;
+    background-color: var(--paper);
+    background-image: radial-gradient(circle, var(--dot) 0.85px, transparent 1px);
+    background-size: 24px 24px;
+    background-position: 12px 12px;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: var(--font);
+    font-weight: 400;
+  }
+
+  h1, b, strong { font-weight: 700; }
+
+  #gameCanvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: pointer;
+  }
+
+  button, select, input {
+    font: inherit;
+    color: inherit;
+    border: 0;
+    background: none;
+    outline: none;
+  }
+  button { cursor: pointer; padding: 0; }
+
+  .panel {
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 14px;
+    box-shadow: 0 0 0 1px var(--ring), 0 4px 14px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  }
+
+  .label { font-size: 12.5px; color: var(--muted); line-height: 1.25; }
+
+  /* HUD */
+  #hud {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 8;
+    padding: 16px 0 0 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+  #hud.hidden { opacity: 0; }
+  .board { padding: 13px 16px; display: grid; gap: 11px; }
+  .tally { display: flex; align-items: flex-end; gap: 22px; }
+  .stat .label { margin-top: 5px; }
+  #score {
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 0.85;
+    font-variant-numeric: tabular-nums;
+    display: inline-block;
+    transform-origin: left bottom;
+  }
+  #score.bump { animation: bump 0.35s ease; }
+  @keyframes bump {
+    0% { transform: scale(1); }
+    35% { transform: scale(1.14); }
+    100% { transform: scale(1); }
+  }
+  #best { font-size: 21px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .stat-persona { padding-left: 14px; border-left: 1px solid var(--line); }
+  #hudPersonaName { font-size: 15px; font-weight: 700; line-height: 1.1; color: var(--ink); }
+  .ballrow { display: grid; gap: 7px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .ballrow-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  #tracker { display: flex; gap: 7px; }
+  .dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1.5px solid var(--faint); position: relative;
+    transition: background 0.2s, border-color 0.2s, transform 0.2s;
+  }
+  .dot.next { border-color: var(--ink); animation: pulse 1.2s ease-in-out infinite; }
+  .dot.fly { background: var(--faint); border-color: var(--faint); }
+  .dot.made { background: var(--ink); border-color: var(--ink); }
+  .dot.swish { background: var(--butter-hi); border-color: var(--amber); }
+  .dot.miss { border-color: #e4e4e4; }
+  .dot.miss::after {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: 8px; height: 1.5px; background: var(--faint);
+    transform: translate(-50%, -50%) rotate(-45deg); border-radius: 2px;
+  }
+  @keyframes pulse { 50% { transform: scale(1.22); } }
+  #ballLabel { font-variant-numeric: tabular-nums; }
+  #aiTargetHint { color: var(--amber); font-size: 11.5px; }
+  #streak {
+    font-size: 13px; font-weight: 700; color: var(--amber);
+    background: var(--butter-soft); border-radius: 9px; padding: 5px 11px;
+    box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.16); white-space: nowrap;
+    opacity: 0; transform: translateY(-4px); transition: opacity 0.25s, transform 0.25s;
+  }
+  #streak.on { opacity: 1; transform: none; }
+
+  /* Top Control Bar */
+  #topControls {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 15;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .control-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 7px;
+    flex-wrap: wrap;
+    max-width: calc(100vw - 32px);
+  }
+  .ctrl-group { display: inline-flex; align-items: center; gap: 5px; padding-left: 5px; }
+  .ctrl-label { font-size: 12px; color: var(--muted); }
+  #personaSelect {
+    background: var(--chip);
+    border-radius: 8px;
+    padding: 5px 9px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    max-width: 186px;
+  }
+  #personaSelect:hover { background: #eaecef; }
+  .ctrl-divider { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+  .ctrl-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 30px; padding: 0 9px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    transition: background 0.15s, color 0.15s, transform 0.12s;
+  }
+  .ctrl-btn:hover { background: var(--chip); color: var(--ink); }
+  .ctrl-btn:active { transform: scale(0.96); }
+  .ctrl-btn.active {
+    background: var(--butter-soft);
+    color: var(--umber);
+    box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.18);
+  }
+  .dot-ind { width: 7px; height: 7px; border-radius: 50%; background: var(--soft); }
+  .ctrl-btn.active .dot-ind { background: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18); }
+
+  /* Streamer Webcam PiP */
+  .pip-window {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    width: 300px;
+    z-index: 18;
+    border-radius: 16px;
+    background: var(--pip-bg);
+    color: #f8fafc;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+    transition: width 0.24s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.25s, transform 0.25s;
+  }
+  .pip-window.size-sm { width: 244px; }
+  .pip-window.size-lg { width: 376px; }
+  .pip-window.hidden { opacity: 0; pointer-events: none; transform: translateY(18px) scale(0.96); }
+  .pip-header {
+    display: flex; align-items: center; gap: 7px; padding: 7px 9px;
+    background: linear-gradient(180deg, #21252e 0%, #191c24 100%);
+    border-bottom: 1px solid var(--pip-border);
+    cursor: grab;
+  }
+  .pip-header:active { cursor: grabbing; }
+  .pip-live-badge {
+    display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px;
+    border-radius: 6px; background: rgba(239, 68, 68, 0.18); color: #fca5a5;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.6px; flex: none;
+  }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live-red); animation: liveBlink 1.4s ease-in-out infinite; }
+  @keyframes liveBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .pip-title-wrap { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; flex: 1; }
+  .pip-name { font-size: 12px; font-weight: 700; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pip-viewers { font-size: 11px; color: #94a3b8; font-variant-numeric: tabular-nums; flex: none; }
+  .pip-actions { display: flex; align-items: center; gap: 2px; }
+  .pip-icon-btn {
+    width: 23px; height: 23px; border-radius: 6px; display: grid; place-items: center;
+    font-size: 12px; color: #cbd5e1; transition: background 0.15s, color 0.15s;
+  }
+  .pip-icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #ffffff; }
+
+  .pip-viewport { position: relative; width: 100%; aspect-ratio: 16 / 10; background: #0f1117; overflow: hidden; }
+  .cam-stage {
+    position: relative; width: 100%; height: 100%; overflow: hidden;
+    transform-origin: center 55%;
+    transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s;
+  }
+  .cam-stage[data-state="idle"] { animation: camBreathe 3.8s ease-in-out infinite; }
+  .cam-stage[data-state="press"] { transform: scale(1.045) translateY(3px); filter: contrast(1.03) saturate(1.04); }
+  .cam-stage[data-state="cheer"] { animation: camCheer 0.55s ease-out; filter: brightness(1.06) saturate(1.08); }
+  .cam-stage[data-state="miss"] { animation: camOops 0.45s ease-out; }
+  @keyframes camBreathe {
+    0%, 100% { transform: scale(1.01) translateY(0px); }
+    50% { transform: scale(1.022) translateY(-1.8px); }
+  }
+  @keyframes camCheer {
+    0% { transform: scale(1.03) translateY(0); }
+    35% { transform: scale(1.07) translateY(-5px); }
+    70% { transform: scale(1.02) translateY(1px); }
+    100% { transform: scale(1.03) translateY(0); }
+  }
+  @keyframes camOops {
+    0% { transform: translateX(0) rotate(0deg); }
+    25% { transform: translateX(-4px) rotate(-0.8deg); }
+    65% { transform: translateX(3px) rotate(0.6deg); }
+    100% { transform: translateX(0) rotate(0deg); }
+  }
+  .cam-frame {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: center 22%;
+    opacity: 0; transition: opacity 0.2s ease; pointer-events: none;
+  }
+  .cam-frame.active { opacity: 1; }
+  .cam-fallback { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .cam-stage.has-photo .cam-fallback { display: none; }
+  .cam-vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.36) 0%, transparent 28%, transparent 62%, rgba(15, 23, 42, 0.78) 100%);
+  }
+  .cam-top-overlay {
+    position: absolute; top: 8px; left: 9px; right: 9px;
+    display: flex; align-items: center; justify-content: space-between; pointer-events: none;
+  }
+  .cam-status-chip {
+    font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+    background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(6px);
+    color: #f8fafc; border: 1px solid rgba(255, 255, 255, 0.14);
+    transition: background 0.2s, color 0.2s;
+  }
+  .cam-status-chip.holding { background: rgba(252, 211, 77, 0.92); color: #451a03; border-color: rgba(245, 158, 11, 0.5); }
+  .cam-status-chip.cheer { background: rgba(34, 197, 94, 0.9); color: #052e16; }
+  .cam-status-chip.miss { background: rgba(239, 68, 68, 0.85); color: #ffffff; }
+  .audio-bars {
+    display: flex; align-items: flex-end; gap: 2.5px; height: 14px;
+    padding: 2px 5px; border-radius: 6px; background: rgba(15, 23, 42, 0.52);
+  }
+  .audio-bars span { width: 2.5px; height: 4px; border-radius: 2px; background: #fcd34d; }
+  .audio-bars.talking span:nth-child(1) { animation: barEq 0.45s ease-in-out infinite alternate; }
+  .audio-bars.talking span:nth-child(2) { animation: barEq 0.35s 0.1s ease-in-out infinite alternate; }
+  .audio-bars.talking span:nth-child(3) { animation: barEq 0.5s 0.05s ease-in-out infinite alternate; }
+  .audio-bars.talking span:nth-child(4) { animation: barEq 0.4s 0.16s ease-in-out infinite alternate; }
+  @keyframes barEq { from { height: 3px; } to { height: 11px; } }
+  .cam-subtitle {
+    position: absolute; left: 8px; right: 8px; bottom: 7px;
+    font-size: 11.5px; line-height: 1.38; color: #ffffff;
+    background: rgba(15, 23, 42, 0.72); backdrop-filter: blur(6px);
+    padding: 5px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .cam-subtitle.pop { animation: subPop 0.24s ease-out; }
+  @keyframes subPop { 0% { transform: translateY(4px); opacity: 0.5; } 100% { transform: translateY(0); opacity: 1; } }
+
+  /* Mechanical Keyboard Deck inside PiP */
+  .pip-keyboard-deck {
+    padding: 8px 9px 9px;
+    background: #181b22;
+    border-top: 1px solid var(--pip-border);
+    display: grid;
+    gap: 7px;
+  }
+  .kb-top-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .kb-cluster { display: flex; gap: 4px; }
+  .mini-key {
+    min-width: 23px; height: 21px; padding: 0 4px; border-radius: 5px;
+    background: #272b36; color: #cbd5e1; font-size: 10px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 0 #0f1116, inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transition: transform 0.06s, background 0.08s, box-shadow 0.06s, color 0.08s;
+  }
+  .mini-key.pressed {
+    transform: translateY(2px); background: #fcd34d; color: #451a03;
+    box-shadow: 0 0 0 #0f1116, 0 0 10px rgba(252, 211, 77, 0.45);
+  }
+  .kb-telemetry { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+  .kb-meter-pill { background: rgba(255, 255, 255, 0.05); padding: 2px 6px; border-radius: 5px; }
+  .kb-meter-pill strong { color: #fde68a; font-weight: 700; }
+  .mini-spacebar {
+    position: relative; height: 29px; border-radius: 7px; background: #2a2f3c; overflow: hidden;
+    box-shadow: 0 3px 0 #0c0e13, inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transition: transform 0.06s ease, box-shadow 0.06s ease, background 0.08s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .mini-spacebar.pressed {
+    transform: translateY(3px); background: #353b4a;
+    box-shadow: 0 0 0 #0c0e13, 0 0 14px rgba(252, 211, 77, 0.42);
+  }
+  .space-fill {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+    background: linear-gradient(90deg, #f59e0b 0%, #fcd34d 100%);
+    opacity: 0.88; transition: width 0.04s linear;
+  }
+  .space-label {
+    position: relative; z-index: 1; display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.4px; color: #f8fafc;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Danmaku & Chat Panel */
+  #danmakuLayer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 7; }
+  .dm-item {
+    position: absolute; left: 100%; white-space: nowrap; font-size: 14.5px; font-weight: 700;
+    color: var(--ink); background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(31, 35, 41, 0.08); padding: 4px 11px; border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05); will-change: transform; animation: dmFly linear forwards;
+  }
+  .dm-item.hot { background: var(--butter-soft); color: var(--umber); border-color: rgba(180, 83, 9, 0.22); }
+  .dm-item.user { background: #1f2329; color: #fde68a; border-color: #1f2329; }
+  @keyframes dmFly { from { transform: translateX(0); } to { transform: translateX(calc(-100vw - 120%)); } }
+
+  .chat-panel {
+    position: fixed; left: 16px; bottom: 16px; width: 265px; z-index: 14;
+    display: flex; flex-direction: column; overflow: hidden;
+    transition: opacity 0.25s, transform 0.25s;
+  }
+  .chat-panel.collapsed { opacity: 0; pointer-events: none; transform: translateY(16px); }
+  .chat-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 11px; font-size: 12px; font-weight: 700; border-bottom: 1px solid var(--line); }
+  .chat-count { font-size: 11px; color: var(--amber); background: var(--butter-soft); padding: 2px 6px; border-radius: 6px; }
+  .chat-messages { height: 140px; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; font-size: 12px; line-height: 1.4; }
+  .chat-msg { color: var(--ink); word-break: break-word; }
+  .chat-msg .u { font-weight: 700; color: var(--amber); margin-right: 5px; }
+  .chat-msg.me .u { color: #2563eb; }
+  .chat-form { display: flex; gap: 6px; padding: 7px 8px; border-top: 1px solid var(--line); background: rgba(248, 250, 252, 0.85); }
+  .chat-form input { flex: 1; background: #fff; border-radius: 8px; padding: 5px 8px; font-size: 12px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); }
+  .chat-form button { padding: 0 11px; border-radius: 8px; background: var(--butter); color: var(--umber); font-size: 12px; font-weight: 700; }
+
+  /* Stream mode */
+  body.stream-mode #topControls, body.stream-mode #hint { opacity: 0; pointer-events: none; transform: translateY(-10px); }
+  #exitStreamBtn {
+    position: fixed; top: 14px; right: 14px; z-index: 25; padding: 7px 12px;
+    font-size: 12px; color: var(--muted); opacity: 0; pointer-events: none; transition: opacity 0.25s;
+  }
+  body.stream-mode #exitStreamBtn { opacity: 0.4; pointer-events: auto; }
+  body.stream-mode #exitStreamBtn:hover { opacity: 1; color: var(--ink); }
+
+  /* Hint */
+  #hint {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+    font-size: 13.5px; color: var(--muted); white-space: nowrap; pointer-events: none;
+    transition: opacity 0.4s; display: flex; align-items: center; gap: 7px; z-index: 8;
+  }
+  #hint.hidden { opacity: 0; }
+  kbd {
+    font: inherit; font-size: 12px; color: #52525b; background: var(--chip);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08); border-radius: 6px; padding: 2px 7px; line-height: 1.3;
+  }
+
+  /* Overlay */
+  #overlay {
+    position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 18px;
+    background: rgba(20, 22, 26, 0.24); backdrop-filter: blur(3px);
+    opacity: 0; pointer-events: none; transition: opacity 0.3s ease; overflow-y: auto;
+  }
+  #overlay.on { opacity: 1; pointer-events: auto; }
+  .card {
+    width: min(430px, 100%); background: var(--card); border-radius: 20px; padding: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    transform: translateY(12px); transition: transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1); display: none;
+  }
+  #overlay.on .card.show { transform: none; }
+  .card.show { display: block; }
+  .card-head-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .logo { width: 44px; height: 44px; border-radius: 12px; background: #22252b; display: grid; place-items: center; }
+  .logo svg { width: 25px; height: 25px; }
+  .title { font-size: 30px; line-height: 1.05; margin: 0; }
+  .keys { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); font-size: 13.5px; margin: 12px 0 7px; }
+  .tag { color: var(--muted); font-size: 13.5px; line-height: 1.5; margin: 0 0 14px; }
+  .chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 8px; background: var(--butter); color: var(--umber); }
+
+  .persona-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 16px; }
+  .p-card {
+    display: flex; align-items: center; gap: 8px; padding: 8px 9px; border-radius: 12px;
+    background: #f8f9fa; box-shadow: inset 0 0 0 1.5px transparent; text-align: left;
+    transition: background 0.16s, box-shadow 0.16s;
+  }
+  .p-card:hover { background: #f1f3f5; }
+  .p-card.selected { background: var(--butter-soft); box-shadow: inset 0 0 0 1.5px var(--amber); }
+  .p-card.full-span { grid-column: span 2; }
+  .p-avatar { width: 32px; height: 32px; border-radius: 9px; background: #fff; display: grid; place-items: center; font-size: 17px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); flex: none; }
+  .p-info { min-width: 0; }
+  .p-name { font-size: 12.5px; font-weight: 700; color: var(--ink); line-height: 1.25; }
+  .p-desc { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .actions { display: flex; gap: 10px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    height: 46px; border-radius: 12px; font-size: 15.5px; font-weight: 700;
+    transition: transform 0.12s, background 0.2s;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { flex: 1; background: var(--butter); color: var(--umber); box-shadow: 0 0 0 1px rgba(180, 83, 9, 0.2); }
+  .btn.primary:hover { background: var(--butter-hi); }
+  .btn.primary kbd { background: rgba(255, 255, 255, 0.65); color: #92400e; box-shadow: none; }
+  .btn.ghost { width: 46px; flex: none; background: var(--chip); color: var(--ink); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06); }
+  .btn.ghost:hover { background: #e8eaed; }
+  .btn svg { width: 19px; height: 19px; }
+
+  .foot { text-align: center; color: var(--soft); font-size: 12px; margin-top: 14px; }
+  .foot:empty { display: none; }
+  .result { display: flex; align-items: flex-end; gap: 26px; margin: 16px 0 18px; }
+  .result .label { margin-top: 6px; }
+  #endScore { font-size: 62px; font-weight: 700; line-height: 0.85; font-variant-numeric: tabular-nums; display: block; }
+  #stAcc, #stSwish { font-size: 26px; font-weight: 700; line-height: 0.95; font-variant-numeric: tabular-nums; }
+  .shots { display: flex; justify-content: space-between; margin-bottom: 14px; }
+  .shots .dot { width: 17px; height: 17px; border-width: 2px; }
+  .shots .dot.miss::after { width: 10px; height: 2px; }
+  .end-comment { font-size: 13px; color: var(--umber); background: var(--butter-soft); border-radius: 10px; padding: 9px 11px; margin-bottom: 16px; line-height: 1.45; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translate(-50%, 20px);
+    background: #22252b; color: #fff; font-size: 13px; padding: 8px 15px; border-radius: 10px;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s; white-space: nowrap; z-index: 40;
+  }
+  #toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+  @media (max-width: 720px) {
+    .pip-window { width: 226px; right: 10px; bottom: 10px; }
+    .chat-panel { width: 215px; left: 10px; bottom: 10px; }
+    #hud { padding: 10px 0 0 10px; }
+    .board { padding: 10px 12px; gap: 9px; }
+    #score { font-size: 34px; }
+    .stat-persona, .ctrl-label, .ctrl-divider { display: none; }
+    #topControls { top: 10px; right: 10px; }
+    #personaSelect { max-width: 135px; font-size: 11.5px; }
+    .ctrl-btn { padding: 0 7px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" aria-label="十球投篮游戏画布"></canvas>
+<div id="danmakuLayer" aria-hidden="true"></div>
+
+<header id="hud" class="hidden">
+  <div class="board panel">
+    <div class="tally">
+      <div class="stat"><div id="score">0</div><div class="label">得分</div></div>
+      <div class="stat"><div id="best">0</div><div class="label">最高分</div></div>
+      <div class="stat stat-persona">
+        <div id="hudPersonaName">林小夏</div>
+        <div class="label" id="hudModeTag">AI 自动投篮</div>
+      </div>
+    </div>
+    <div class="ballrow">
+      <div id="tracker"></div>
+      <div class="ballrow-meta">
+        <span class="label" id="ballLabel">第 1 / 10 球</span>
+        <span class="label" id="aiTargetHint"></span>
+      </div>
+    </div>
+  </div>
+  <div id="streak"></div>
+</header>
+
+<nav id="topControls" aria-label="直播与角色控制">
+  <div class="control-pill panel">
+    <label class="ctrl-group" title="切换场上角色 / AI人格">
+      <span class="ctrl-label">角色</span>
+      <select id="personaSelect" aria-label="选择角色">
+        <option value="campus_girl">🏀 校园运动美女 · 林小夏</option>
+        <option value="basketball_bro">🔥 爱投篮的哥哥 · 陈默</option>
+        <option value="sports_boy">⚡ 元气体育生 · 阿凯</option>
+        <option value="chill_scholar">👓 佛系学霸 · 晚晚</option>
+        <option value="human">🎮 我自己玩（手动）</option>
+      </select>
+    </label>
+    <div class="ctrl-divider"></div>
+    <button class="ctrl-btn active" id="btnAutoPlay"><span class="dot-ind"></span><span id="autoPlayText">AI托管中</span></button>
+    <button class="ctrl-btn active" id="btnAutoLoop">连播</button>
+    <button class="ctrl-btn active" id="btnPipToggle">直播窗</button>
+    <button class="ctrl-btn" id="btnDanmakuToggle">弹幕</button>
+    <button class="ctrl-btn" id="btnTtsToggle">语音</button>
+    <button class="ctrl-btn active" id="btnSoundToggle">音效</button>
+    <button class="ctrl-btn" id="btnStreamMode">纯净</button>
+  </div>
+</nav>
+
+<div id="hint" class="hidden">
+  <span>长按蓄力，松手投篮</span>
+  <span>或按</span>
+  <kbd>Space</kbd>
+</div>
+
+<aside id="streamerPip" class="pip-window" aria-label="AI主播直播小窗">
+  <div class="pip-header" id="pipDragHandle">
+    <div class="pip-live-badge"><span class="live-dot"></span><span>LIVE</span></div>
+    <div class="pip-title-wrap">
+      <span class="pip-name" id="pipName">林小夏 · 校园运动直播间</span>
+      <span class="pip-viewers" id="pipViewers">👁 2,680</span>
+    </div>
+    <div class="pip-actions">
+      <button class="pip-icon-btn" id="pipUploadBtn" title="上传或拖拽真人主播照片">📷</button>
+      <button class="pip-icon-btn" id="pipSizeBtn" title="切换小窗大小">⤢</button>
+      <button class="pip-icon-btn" id="pipCloseBtn" title="收起小窗">✕</button>
+    </div>
+    <input type="file" id="pipPhotoInput" accept="image/*" hidden>
+  </div>
+
+  <div class="pip-viewport">
+    <div class="cam-stage" id="camStage" data-state="idle">
+      <img id="camImgCustom" class="cam-frame" alt="自定义主播照片">
+      <canvas id="camFallbackCanvas" class="cam-fallback"></canvas>
+      <div class="cam-vignette"></div>
+      <div class="cam-top-overlay">
+        <span class="cam-status-chip" id="camActionChip">准备瞄准</span>
+        <div class="audio-bars" id="audioBars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      </div>
+      <div class="cam-subtitle" id="camSubtitle">哈喽直播间的宝子们！小夏今天挑战十球投篮，看看能进几个空心～</div>
+    </div>
+  </div>
+
+  <div class="pip-keyboard-deck">
+    <div class="kb-top-row">
+      <div class="kb-cluster">
+        <span class="mini-key" id="mkW">W</span>
+        <span class="mini-key" id="mkA">A</span>
+        <span class="mini-key" id="mkS">S</span>
+        <span class="mini-key" id="mkD">D</span>
+      </div>
+      <div class="kb-telemetry">
+        <span class="kb-meter-pill">力度 <strong id="kbPowerVal">0%</strong></span>
+        <span class="kb-meter-pill">按压 <strong id="kbHoldVal">0ms</strong></span>
+      </div>
+      <span class="mini-key" id="mkR" title="重开快捷键">R</span>
+    </div>
+    <div class="mini-spacebar" id="mkSpace">
+      <div class="space-fill" id="kbSpaceFill"></div>
+      <div class="space-label"><span>⌨</span><span id="kbSpaceText">SPACE · 空格蓄力投篮</span></div>
+    </div>
+  </div>
+</aside>
+
+<section id="chatPanel" class="chat-panel panel collapsed" aria-label="直播间弹幕互动">
+  <div class="chat-header">
+    <span>💬 直播间互动</span>
+    <span class="chat-count" id="chatHotTag">热度 9.8w</span>
+  </div>
+  <div class="chat-messages" id="chatMessages"></div>
+  <form class="chat-form" id="chatForm">
+    <input type="text" id="chatInput" placeholder="发弹幕互动（试试输入：加油 / 换哥哥）" maxlength="40" autocomplete="off">
+    <button type="submit">发送</button>
+  </form>
+</section>
+
+<button id="exitStreamBtn" class="panel">退出纯净模式</button>
+
+<div id="overlay" class="on">
+  <div class="card show" id="startCard">
+    <div class="card-head-row">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="8.5"/>
+          <path d="M3.8 10c5.2 1.8 11.2 1.8 16.4 0"/>
+          <path d="M12 3.5c-2.8 5.2-2.8 11.8 0 17"/>
+        </svg>
+      </div>
+      <span class="chip">Goofy Hoops 直播复刻</span>
+    </div>
+    <h1 class="title">十球投篮</h1>
+    <div class="keys"><kbd>长按</kbd> 蓄力，<kbd>松手</kbd> 出手 · 支持 <kbd>AI 自动打球</kbd></div>
+    <p class="tag">空心入网得 3 分，普通进球 2 分。连中 3 球翻倍，连中 6 球三倍积分！</p>
+    <div class="persona-grid" id="startPersonaGrid"></div>
+    <div class="actions">
+      <button class="btn primary" id="playBtn"><span id="playBtnText">开始 林小夏 AI 直播投篮</span><kbd>Space</kbd></button>
+    </div>
+    <div class="foot" id="startFoot"></div>
+  </div>
+
+  <div class="card" id="endCard">
+    <div class="row">
+      <div class="label" id="endRoundTitle">本轮结束</div>
+      <span class="chip" id="endChip" style="display:none">新纪录</span>
+    </div>
+    <div class="result">
+      <div><span id="endScore">0</span><div class="label">总得分</div></div>
+      <div><div id="stAcc">0%</div><div class="label">命中率</div></div>
+      <div><div id="stSwish">0</div><div class="label">空心</div></div>
+    </div>
+    <div class="shots" id="endShots"></div>
+    <div class="end-comment" id="endComment"></div>
+    <div class="actions">
+      <button class="btn primary" id="againBtn"><span id="againBtnText">再来一轮</span><kbd>Space</kbd></button>
+      <button class="btn ghost" id="shareBtn" title="下载战绩海报">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>
+        </svg>
+      </button>
+    </div>
+    <div class="foot" id="endFoot"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ==================== 1. PERSONAS ==================== */
+  const SWEET_CHARGE = 0.592;
+  const pickRandom = (arr) => (arr && arr.length ? arr[Math.floor(Math.random() * arr.length)] : '');
+
+  const PERSONAS = {
+    campus_girl: {
+      id: 'campus_girl', name: '林小夏', title: '校园运动美女', roomTitle: '林小夏 · 校园运动直播间',
+      emoji: '🏀', desc: '校队三分女神 · 稳健俏皮', isAI: true, baseViewers: 2680,
+      accessory: 'ponytail', accentColor: '#f59e0b',
+      outfitPalette: { hair: '#2b1e1a', skin: '#fde2ce', jacket: '#ffffff', stripe: '#f59e0b', ribbon: '#fcd34d', roomWall: '#f7efe3', desk: '#e6c9a2', keycap: '#fffaf0' },
+      ai: { targetCharge: SWEET_CHARGE, bias: 0, jitter: 0.026, streakTighten: 0.0025, nervesAtSix: 0.012, thinkDelay: [0.36, 0.72], preferDownswing: 0.14, missRecovery: 0.7 },
+      tts: { rate: 1.12, pitch: 1.25 },
+      lines: {
+        intro: ['哈喽直播间的宝子们！小夏今天挑战十球投篮，看看能进几个空心～', '刚下体育课回来，手还热乎着呢，空格键准备就绪！'],
+        charge: ['深呼吸…稳住蓄力条…', '嗯哼，感觉就在 59% 附近！', '轻按空格，看我这波完美弧线～', '这次我要瞄一个纯空心！'],
+        swish: ['哇！纯空心三分入网！听这刷网声也太解压了吧！', '空心！！这手感简直拉满，弹幕刷起来～', '漂亮！丝滑空心，空格键已经被我拿捏了！'],
+        made: ['耶！稳稳颠进去了，2 分到手～', '擦板也能进！运气也是实力的一部分嘛～', '稳住！手感越来越顺了！'],
+        streak: ['三连中双倍积分开启！！直播间气氛燥起来！', '哇啊啊连进停不下来啦，蓄力条变快了我也稳得住！'],
+        miss: ['哎呀呀打铁了！刚刚按多了一丢丢…下球必进！', '呜呜刷筐而出了，键盘别背锅是我手滑啦哈哈～', '没事没事，微调一下力度，下一球找回场子！'],
+        endHigh: ['哇塞这轮发挥太棒啦！快截屏留念，休息两秒马上开下一局！'],
+        endMid: ['成绩还不错耶～感觉下一轮能把空心率再拉高一点！'],
+        endLow: ['哈哈这局纯属热身！看我下一轮认真模式全进！'],
+      },
+      danmaku: {
+        swish: ['空心！！学姐太准了吧', '这刷网声好治愈', '校篮球队长实锤了', '66666 空格键大师'],
+        made: ['稳稳拿下！', '这球颠得真听话哈哈', '小夏加油！！'],
+        streak: ['三连中双倍积分！起飞！', '手感滚烫🔥🔥🔥', '蓄力条加速了还能进太强了'],
+        miss: ['哈哈哈哈打铁少女', '差一点点好可惜！', '稳住下球必空心！'],
+        ambient: ['刚进直播间，主播好甜！', '这游戏是 Goofy Fish 的投篮诶', '小窗看按空格键好有代入感', '前排打卡！支持小夏'],
+      },
+    },
+    basketball_bro: {
+      id: 'basketball_bro', name: '陈默', title: '爱投篮的哥哥', roomTitle: '陈默学长 · 篮球定点特训',
+      emoji: '🔥', desc: '球场冷面射手 · 空心达人', isAI: true, baseViewers: 1940,
+      accessory: 'headband', accentColor: '#2563eb',
+      outfitPalette: { hair: '#1c2026', skin: '#f2ccb0', jacket: '#1e3a5f', stripe: '#ffffff', ribbon: '#3b82f6', roomWall: '#edf1f7', desk: '#c7b299', keycap: '#e2e8f0' },
+      ai: { targetCharge: SWEET_CHARGE, bias: 0.002, jitter: 0.019, streakTighten: 0.003, nervesAtSix: 0.006, thinkDelay: [0.45, 0.85], preferDownswing: 0.08, missRecovery: 0.65 },
+      tts: { rate: 1.0, pitch: 0.86 },
+      lines: {
+        intro: ['欢迎来到球场训练营，我是陈默。十颗球，看重的是出手节奏。', '练完投篮回来开两把十球，带大家找找空心的感觉。'],
+        charge: ['压腕，稳住 59% 的发力点。', '呼吸放缓，注意上一球的刻度标记。', '好节奏，准备出手。'],
+        swish: ['空心。力量和抛物线刚刚好。', '唰网入袋，就是这个 55 度角的手感。'],
+        made: ['进了，稍微擦了点框，下一球再收一点力。', '稳稳命中，基本功不能丢。'],
+        streak: ['连中状态来了，球场节奏已锁定。', '双倍积分拿下，越快越要冷静。'],
+        miss: ['短了一点点，刚才松手早了 20 毫秒。', '打铁正常，调整一下刻度，下一球补回来。'],
+        endHigh: ['这轮命中率挺满意，继续保持这个手感开下一组。'],
+        endMid: ['中规中矩，下一轮争取多拿几个纯空心。'],
+        endLow: ['手感还没完全打开，再来一轮找回准星。'],
+      },
+      danmaku: {
+        swish: ['学长太稳了！！', '教科书级空心球', '陈哥这手真像装了瞄准镜'],
+        made: ['稳如老狗', '球场哥哥好帅'],
+        streak: ['连中机器启动！', '倍率拉满了卧槽'],
+        miss: ['罕见打铁！截屏留念', '微调一下马上进'],
+        ambient: ['爱投篮的哥哥终于上线了', '看这按空格的节奏太稳了', '前排学习投篮'],
+      },
+    },
+    sports_boy: {
+      id: 'sports_boy', name: '阿凯', title: '元气体育生', roomTitle: '阿凯 · 热血暴扣投篮屋',
+      emoji: '⚡', desc: '节奏飞快 · 热血连击型', isAI: true, baseViewers: 1520,
+      accessory: 'spiky', accentColor: '#ea580c',
+      outfitPalette: { hair: '#1f1b18', skin: '#ecc2a0', jacket: '#ea580c', stripe: '#fef08a', ribbon: '#ffffff', roomWall: '#fff4eb', desk: '#d6b48c', keycap: '#f8fafc' },
+      ai: { targetCharge: SWEET_CHARGE + 0.005, bias: 0.004, jitter: 0.036, streakTighten: 0.004, nervesAtSix: 0.02, thinkDelay: [0.18, 0.42], preferDownswing: 0.04, missRecovery: 0.85 },
+      tts: { rate: 1.22, pitch: 1.0 },
+      lines: {
+        intro: ['兄弟们冲呀！阿凯极速十球挑战，主打一个出手快准狠！'],
+        charge: ['蓄力——走你！', '干脆利落，就现在！'],
+        swish: ['嗷呜！！直接穿网空心！爽翻了！', 'BOOM！三分空心，这球帅不帅！'],
+        made: ['nice！进了就算好球！', '哈哈哈打板也进，血赚！'],
+        streak: ['燃起来了燃起来了！连击翻倍冲呀！'],
+        miss: ['哈哈哈劲儿使大了！差点把篮板砸穿！', '哎哟打铁了！越挫越勇！'],
+        endHigh: ['破纪录冲锋成功！根本停不下来，继续下一轮！'],
+        endMid: ['不错不错！下一把直接拉满！'],
+        endLow: ['哈哈热身完毕，这把认真了！'],
+      },
+      danmaku: {
+        swish: ['热血空心！！', '阿凯出手太快了'],
+        made: ['冲冲冲！', '好球！'],
+        streak: ['着火了着火了🔥🔥', '起飞啦！'],
+        miss: ['力气太大啦哈哈', '篮板：我做错了什么'],
+        ambient: ['这哥们精力真旺盛', '速通十球太爽了'],
+      },
+    },
+    chill_scholar: {
+      id: 'chill_scholar', name: '晚晚', title: '佛系学霸', roomTitle: '晚晚 · 物理系摸鱼投篮',
+      emoji: '👓', desc: '嘴上随缘 · 暗算抛物线', isAI: true, baseViewers: 1830,
+      accessory: 'glasses', accentColor: '#0d9488',
+      outfitPalette: { hair: '#242228', skin: '#fce5d4', jacket: '#f3efe6', stripe: '#0d9488', ribbon: '#94a3b8', roomWall: '#f2f5f3', desk: '#dfd2be', keycap: '#ffffff' },
+      ai: { targetCharge: SWEET_CHARGE - 0.001, bias: 0, jitter: 0.022, streakTighten: 0.002, nervesAtSix: 0.005, thinkDelay: [0.5, 0.95], preferDownswing: 0.25, missRecovery: 0.6 },
+      tts: { rate: 0.96, pitch: 1.12 },
+      lines: {
+        intro: ['写完高数摸五分钟鱼…根据重力 g=1017，59% 力度理论上刚好空心。'],
+        charge: ['初速度约 616，55 度抛物线，计算完毕。', '随缘按一下空格…嗯，就是现在。'],
+        swish: ['嗯，空心。牛顿力学诚不欺我。', '完美落入误差带内，3 分到手。'],
+        made: ['碰框进的，也算符合预期。', '2 分，稳妥。'],
+        streak: ['哦，已经连中触发倍率了呀，继续保持平滑输出。'],
+        miss: ['唔，手抖误差。下一球修正 0.02。'],
+        endHigh: ['实验数据非常漂亮，再测一组样本吧。'],
+        endMid: ['稳定发挥，符合正态分布。'],
+        endLow: ['样本方差偏大，需要重新校准手感。'],
+      },
+      danmaku: {
+        swish: ['物理外挂实锤！', '嘴上说佛系实际心算抛物线'],
+        made: ['牛顿点了个赞', '淡定拿分'],
+        streak: ['学霸连击太吓人了'],
+        miss: ['哈哈哈哈手抖误差'],
+        ambient: ['摸鱼直播间最舒服了', '物理系降维打击投篮游戏'],
+      },
+    },
+    human: {
+      id: 'human', name: '你自己', title: '手动亲自上阵', roomTitle: '玩家实况 · 手动操作模式',
+      emoji: '🎮', desc: '按空格键或鼠标长按蓄力投篮', isAI: false, baseViewers: 1200,
+      accessory: 'none', accentColor: '#1f2329',
+      outfitPalette: { hair: '#2b1e1a', skin: '#fde2ce', jacket: '#ffffff', stripe: '#f59e0b', ribbon: '#fcd34d', roomWall: '#f7efe3', desk: '#e6c9a2', keycap: '#fffaf0' },
+      ai: null, tts: { rate: 1.08, pitch: 1.18 },
+      lines: {
+        intro: ['现在交给你亲自上场！长按屏幕或空格键蓄力，松手投篮！'],
+        charge: ['蓄力中…瞄准 59% 附近松手！'],
+        swish: ['哇！你这记纯空心太帅了吧！！', '好准！小夏在旁边给你疯狂打 call！'],
+        made: ['漂亮！稳稳命中！'],
+        streak: ['连进翻倍了！！主播地位不保啦哈哈！'],
+        miss: ['差一点点！看蓄力条上的小刻度微调一下～'],
+        endHigh: ['大神级别发挥！甘拜下风！'],
+        endMid: ['打得很稳呀，再来一局冲新高！'],
+        endLow: ['多试两球找到 59% 力度点就超准啦！'],
+      },
+      danmaku: {
+        swish: ['水友亲自上阵好准！！', '空心 6666'],
+        made: ['稳！', '好球好球'],
+        streak: ['连中大佬！！'],
+        miss: ['哈哈再来一球！'],
+        ambient: ['手动模式更有挑战性'],
+      },
+    },
+  };
+  const PERSONA_ORDER = ['campus_girl', 'basketball_bro', 'sports_boy', 'chill_scholar', 'human'];
+
+  /* ==================== 2. AUDIO ==================== */
+  let actx = null, bus = null, verb = null;
+  const soundState = { enabled: true, ttsEnabled: false };
+
+  function ensureAudio() {
+    if (!soundState.enabled) return;
+    if (!actx) {
+      try {
+        actx = new (window.AudioContext || window.webkitAudioContext)();
+        const comp = actx.createDynamicsCompressor();
+        comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(actx.destination);
+        bus = actx.createGain(); bus.gain.value = 0.9; bus.connect(comp);
+        const len = Math.floor(actx.sampleRate * 1.1);
+        const ir = actx.createBuffer(2, len, actx.sampleRate);
+        for (let c = 0; c < 2; c++) {
+          const d = ir.getChannelData(c);
+          for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+        }
+        const conv = actx.createConvolver(); conv.buffer = ir;
+        verb = actx.createGain(); verb.gain.value = 0.16; verb.connect(conv).connect(comp);
+      } catch { actx = null; }
+    }
+    if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+  }
+  function voice(wet) {
+    const g = actx.createGain(); g.gain.value = 0; g.connect(bus);
+    if (wet) { const w = actx.createGain(); w.gain.value = wet; g.connect(w).connect(verb); }
+    return g;
+  }
+  function partial(freq, f1, dur, vol, type, wet, delay) {
+    if (!actx || !soundState.enabled || vol < 0.003) return;
+    const t = actx.currentTime + (delay || 0);
+    const o = actx.createOscillator(), g = voice(wet);
+    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+    if (f1 && f1 !== freq) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); o.start(t); o.stop(t + dur + 0.05);
+  }
+  function hiss(dur, vol, type, f0, f1, q, wet, attack, delay) {
+    if (!actx || !soundState.enabled || vol < 0.003) return;
+    const t = actx.currentTime + (delay || 0);
+    const n = Math.max(1, Math.floor(actx.sampleRate * dur));
+    const buf = actx.createBuffer(1, n, actx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const src = actx.createBufferSource(); src.buffer = buf;
+    const f = actx.createBiquadFilter(); f.type = type; f.Q.value = q || 0.7;
+    f.frequency.setValueAtTime(f0, t);
+    if (f1 && f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const g = voice(wet);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + (attack || 0.004));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g); src.start(t);
+  }
+  const SND = {
+    bounce(k) { partial(150, 72, 0.16, 0.5 * k, 'sine', 0.08); partial(330, 290, 0.08, 0.1 * k, 'triangle', 0.15); hiss(0.035, 0.28 * k, 'lowpass', 1600, 700, 0.6, 0.05); },
+    rim(k) { for (const [f, d, a] of [[547, 0.55, 1], [1171, 0.42, 0.5], [1806, 0.3, 0.32], [2641, 0.2, 0.2]]) partial(f, f * 0.995, d * (0.7 + 0.5 * k), 0.13 * k * a, 'sine', 0.35); hiss(0.02, 0.12 * k, 'highpass', 3200, 3200, 0.7, 0.2); },
+    board(k) { partial(118, 82, 0.13, 0.42 * k, 'sine', 0.2); hiss(0.07, 0.3 * k, 'bandpass', 520, 380, 1.1, 0.25); },
+    pole(k) { for (const [f, a] of [[311, 1], [702, 0.5], [1113, 0.3]]) partial(f, f, 0.35, 0.09 * k * a, 'sine', 0.3); },
+    swish(clean) { hiss(0.34, clean ? 0.26 : 0.18, 'bandpass', 5200, 2400, 0.9, 0.25, 0.03); hiss(0.16, 0.07, 'highpass', 7000, 6000, 0.7, 0.2, 0.01, 0.02); if (clean) { partial(1568, 1568, 0.5, 0.035, 'sine', 0.5, 0.06); partial(2093, 2093, 0.45, 0.025, 'sine', 0.5, 0.12); } },
+    release() { hiss(0.14, 0.06, 'bandpass', 700, 1500, 0.8, 0.1, 0.02); partial(900, 600, 0.04, 0.03, 'triangle', 0.1); },
+    grab() { partial(210, 150, 0.06, 0.08, 'sine', 0.05); },
+    streak(m) { const base = m >= 3 ? 784 : 659; partial(base, base, 0.22, 0.045, 'triangle', 0.4); partial(base * 1.5, base * 1.5, 0.3, 0.035, 'triangle', 0.4, 0.08); },
+    keyDown() { partial(380, 140, 0.038, 0.14, 'triangle', 0.05); hiss(0.022, 0.12, 'bandpass', 2600, 1100, 1.4, 0.04, 0.002); },
+    keyUp() { partial(520, 280, 0.026, 0.08, 'triangle', 0.04); hiss(0.016, 0.07, 'highpass', 3200, 2200, 0.9, 0.03, 0.002); },
+  };
+  let lastSpokeAt = 0;
+  function speakLine(text, cfg) {
+    if (!soundState.ttsEnabled || !text || !('speechSynthesis' in window)) return;
+    const now = performance.now();
+    if (now - lastSpokeAt < 1800) return;
+    lastSpokeAt = now;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'zh-CN'; u.rate = cfg?.rate ?? 1.08; u.pitch = cfg?.pitch ?? 1.1; u.volume = 0.85;
+      window.speechSynthesis.speak(u);
+    } catch {}
+  }
+
+  /* ==================== 3. PHYSICS & IK ==================== */
+  const G = 1017, BR = 8.3, AX = 188, ROUND = 10, SHOT_ANGLE = (55 * Math.PI) / 180, V_MIN = 380, V_MAX = 780;
+  const COL = { bg: '#ffffff', ink: '#141414', fig: '#141414', muted: '#737373', faint: '#d4d4d4', accent: '#b45309', dot: 'rgba(31,41,55,0.13)' };
+  const PAL = { floor: '#fafafa', concrete: '#ffffff', sage: '#ffffff', cream: '#ffffff', metal: '#ffffff', wood: '#ffffff', ball: '#ffffff', ballD: '#e8e8e8', rim: '#141414', net: '#141414', shoe: '#ffffff' };
+  const RIM_Y = -221.1, RIM_FRONT = [469.2, RIM_Y], RIM_BACK = [505.5, RIM_Y], NET_BOTTOM = -192.6;
+  const BOARD = { x0: 510, x1: 518, y0: -281.6, y1: -208.6 };
+  const POLE = { x0: 571, x1: 577, y0: -271.6, y1: 0 };
+  const SEGS = [[518, -262, 572, -262, 1.2], [518, -234.2, 572, -234.2, 1.2], [530, -235.5, 569, -259, 1], [42, -55.1, 148, -46.6, 1.5], [46.9, -54, 46.9, 0, 1], [142, -47, 142, 0, 1], [565, -0.5, 582, -0.5, 2]];
+  const RACK = { x0: 42, y0: -55.1, x1: 148, y1: -46.6 };
+  const rackSlot = (s) => { const x = 57 + 20 * s; const m = (RACK.y1 - RACK.y0) / (RACK.x1 - RACK.x0); return [x, RACK.y0 + m * (x - RACK.x0) - 9.6]; };
+  const THIGH = 30, SHIN = 30, UARM = 21, FARM = 21;
+  const BASE = { face: 1, flick: 0, head: [0, -121], chest: [0, -96], hip: [0, -65], fF: [1, -8], fB: [-4, -8], kF: [22, -38], kB: [10, -38], hF: [3, -57], hB: [-1, -57], eF: [-6, -78], eB: [-6, -78], ball: null };
+  const mk = (o, b = BASE) => Object.assign({}, b, o);
+  const P = {
+    stand: mk({ head: [0, -122], hF: [4, -55], hB: [-1, -55], eF: [-2, -76], eB: [-1, -76] }),
+    hold: mk({ head: [1, -121], hip: [-1, -66], hF: [14, -83], hB: [24, -99], eF: [2, -70], eB: [8, -72], ball: [21.5, -88.5], hang: 0 }),
+    crouch: mk({ head: [7, -108], chest: [4, -85], hip: [-4, -55], kF: [26, -28], kB: [22, -28], hF: [15, -73], hB: [24, -84], eF: [4, -60], eB: [10, -62], ball: [22, -78], hang: 0 }),
+    rise: mk({ head: [-1, -119], chest: [0, -95], hip: [0, -64], hF: [11, -106], hB: [17, -114], eF: [16, -86], eB: [20, -88], ball: [16, -114] }),
+    set: mk({ head: [-3, -123], chest: [-1, -99], hip: [0, -68], fF: [3, -9], fB: [-2, -9], hF: [15, -134], hB: [21, -136], eF: [18, -114], eB: [24, -114], ball: [21.7, -143.3] }),
+    follow: mk({ head: [-3, -123], chest: [-1, -99], hip: [0, -68], hF: [20, -137], eF: [14, -118], hB: [14, -124], eB: [22, -104], flick: 1 }),
+    drop: mk({ head: [1, -122], chest: [0, -97], hip: [0, -66], hF: [32, -80], hB: [26, -74], eF: [16, -80], eB: [12, -78] }),
+    bend: mk({ face: -1, head: [-28, -104], chest: [-14, -88], hip: [8, -60], kF: [-16, -38], kB: [-12, -38], fF: [-3, -8], fB: [2, -8], hF: [-45, -58], hB: [-54, -61], eF: [-30, -80], eB: [-34, -82], ball: [-51, -57] }),
+    turn: mk({ face: 0, head: [0, -123.5], chest: [0, -98.5], hip: [0, -68.6], fF: [3, -8], fB: [-3, -8], kF: [3, -38], kB: [-3, -38], hF: [9, -55], hB: [-9, -55], eF: [9, -76], eB: [-9, -76] }),
+    cheer: mk({ head: [0, -122], chest: [0, -97], hip: [0, -67], hF: [16, -136], hB: [6, -138], eF: [14, -118], eB: [2, -118] }),
+  };
+  P.turnHold = mk({ hF: [8, -66], hB: [-6, -66], eF: [12, -82], eB: [-10, -82], ball: [1, -70], hang: 0 }, P.turn);
+
+  const PTS = ['head', 'chest', 'hip', 'fF', 'fB', 'kF', 'kB', 'hF', 'hB', 'eF', 'eB'];
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const lerp2 = (a, b, k) => [lerp(a[0], b[0], k), lerp(a[1], b[1], k)];
+  const ballPos = (p) => p.ball || [(p.hF[0] + p.hB[0]) / 2 + 3 * p.face, (p.hF[1] + p.hB[1]) / 2 - 6];
+  function lerpPose(a, b, k) {
+    const o = { face: lerp(a.face, b.face, k), flick: lerp(a.flick, b.flick, k), hang: lerp(a.hang ?? 1, b.hang ?? 1, k) };
+    for (const n of PTS) o[n] = lerp2(a[n], b[n], k);
+    o.ball = lerp2(ballPos(a), ballPos(b), k);
+    return o;
+  }
+  const EASE = { in: (k) => k * k, out: (k) => 1 - (1 - k) * (1 - k), soft: (k) => 0.5 - Math.cos(Math.PI * k) / 2 };
+  const catmull = (p0, p1, p2, p3, t) => 0.5 * (2 * p1 + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+  function pathPose(list, u) {
+    const n = list.length - 1, x = Math.min(n - 1e-6, Math.max(0, u * n)), i = Math.floor(x), t = x - i;
+    const a = list[Math.max(0, i - 1)], b = list[i], c = list[i + 1], d = list[Math.min(n, i + 2)];
+    const o = { face: lerp(b.face, c.face, t), flick: lerp(b.flick, c.flick, t), hang: lerp(b.hang ?? 1, c.hang ?? 1, t) };
+    for (const k of PTS) o[k] = [catmull(a[k][0], b[k][0], c[k][0], d[k][0], t), catmull(a[k][1], b[k][1], c[k][1], d[k][1], t)];
+    const ba = ballPos(a), bb = ballPos(b), bc = ballPos(c), bd = ballPos(d);
+    o.ball = [catmull(ba[0], bb[0], bc[0], bd[0], t), catmull(ba[1], bb[1], bc[1], bd[1], t)];
+    return o;
+  }
+  class Actor {
+    constructor() { this.pose = P.hold; this.q = []; this.step = null; this.t = 0; this.hasBall = true; this.ballRot = 0.6; this.breath = 0; }
+    push(...steps) { this.q.push(...steps); }
+    clear() { this.q = []; this.step = null; }
+    get idle() { return !this.step && !this.q.length; }
+    update(dt) {
+      for (let g = 0; g < 20; g++) {
+        if (!this.step) {
+          if (!this.q.length) return;
+          this.step = this.q.shift(); this.t = 0;
+          if (this.step.fn) { const fn = this.step.fn; this.step = null; fn(); continue; }
+          const targets = this.step.path || (this.step.pose ? [this.step.pose] : [this.pose]);
+          this.step.list = [this.pose, ...targets];
+        }
+        this.t += dt;
+        const s = this.step, k = Math.min(1, this.t / s.d);
+        this.pose = pathPose(s.list, (EASE[s.ez] || EASE.soft)(k));
+        if (k < 1) return;
+        dt = this.t - s.d; this.step = null;
+      }
+    }
+  }
+  function ik(a, b, l1, l2, hint, bend) {
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    let d = Math.hypot(dx, dy);
+    const base = Math.atan2(dy, dx), L = l1 + l2, soft = L * 0.96;
+    if (d > soft) d = soft + (L - soft) * (1 - Math.exp(-(d - soft) / (L - soft)));
+    d = Math.max(Math.abs(l1 - l2) + 0.01, Math.min(L - 0.001, d));
+    const c = Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)));
+    const ang = Math.acos(c);
+    const j1 = [a[0] + l1 * Math.cos(base + ang), a[1] + l1 * Math.sin(base + ang)];
+    const j2 = [a[0] + l1 * Math.cos(base - ang), a[1] + l1 * Math.sin(base - ang)];
+    if (bend) {
+      const side = (j) => (j[0] - a[0]) * (b[1] - j[1]) - (j[1] - a[1]) * (b[0] - j[0]);
+      return Math.sign(side(j1)) === bend ? j1 : j2;
+    }
+    return Math.hypot(j1[0] - hint[0], j1[1] - hint[1]) < Math.hypot(j2[0] - hint[0], j2[1] - hint[1]) ? j1 : j2;
+  }
+  const newBall = (x, y, vx, vy, w) => ({ x, y, vx, vy, rot: Math.random() * 6.28, w: w || 0, scored: false, touched: false, resolved: false, still: 0, alpha: 1, fading: false });
+  function hitPoint(b, cx, cy, rad, e, fr, ev) {
+    const dx = b.x - cx, dy = b.y - cy, d = Math.hypot(dx, dy), m = BR + rad;
+    if (d >= m || d === 0) return false;
+    const nx = dx / d, ny = dy / d; b.x = cx + nx * m; b.y = cy + ny * m;
+    const vn = b.vx * nx + b.vy * ny; if (vn >= 0) return true;
+    const tx = -ny, ty = nx, vt = b.vx * tx + b.vy * ty;
+    b.vx += -(1 + e) * vn * nx - tx * vt * fr; b.vy += -(1 + e) * vn * ny - ty * vt * fr;
+    b.w = lerp(b.w, vt / BR, 0.5); if (ev) ev(-vn); return true;
+  }
+  function closestSeg(px, py, x0, y0, x1, y1) {
+    const dx = x1 - x0, dy = y1 - y0;
+    const t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy)));
+    return [x0 + dx * t, y0 + dy * t];
+  }
+  function hitRect(b, r, e, fr, ev) {
+    const cx = Math.max(r.x0, Math.min(r.x1, b.x)), cy = Math.max(r.y0, Math.min(r.y1, b.y));
+    if (cx === b.x && cy === b.y) {
+      const opts = [[b.x - r.x0, r.x0 - BR, b.y], [r.x1 - b.x, r.x1 + BR, b.y], [b.y - r.y0, b.x, r.y0 - BR], [r.y1 - b.y, b.x, r.y1 + BR]];
+      opts.sort((p, q) => p[0] - q[0]); b.x = opts[0][1]; b.y = opts[0][2]; return true;
+    }
+    return hitPoint(b, cx, cy, 0, e, fr, ev);
+  }
+  function stepBalls(balls, dt, onSfx) {
+    for (const b of balls) {
+      const py = b.y; b.vy += G * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.rot += b.w * dt;
+      if (!b.scored && py < RIM_Y && b.y >= RIM_Y && b.vy > 0 && b.x > RIM_FRONT[0] + 1 && b.x < RIM_BACK[0] - 1) {
+        b.scored = true; onSfx('score', b);
+      }
+      if (b.scored && b.y > RIM_Y && b.y < NET_BOTTOM + BR) {
+        const k = (Math.min(b.y, NET_BOTTOM) - RIM_Y) / (NET_BOTTOM - RIM_Y);
+        const lo = lerp(471, 477, k) + BR * 0.55, hi = lerp(503, 497, k) - BR * 0.55;
+        if (b.x < lo) { b.x = lo; b.vx = Math.abs(b.vx) * 0.3; }
+        if (b.x > hi) { b.x = hi; b.vx = -Math.abs(b.vx) * 0.3; }
+        b.vy *= 1 - 2.2 * dt; b.vx *= 1 - 3 * dt;
+      }
+      if (!b.scored || b.y < RIM_Y - 2) {
+        hitPoint(b, RIM_FRONT[0], RIM_FRONT[1], 1.4, 0.55, 0.04, (v) => onSfx('rim', b, v));
+        hitPoint(b, RIM_BACK[0], RIM_BACK[1], 1.4, 0.55, 0.04, (v) => onSfx('rim', b, v));
+      }
+      hitRect(b, BOARD, 0.6, 0.05, (v) => onSfx('board', b, v));
+      hitRect(b, POLE, 0.08, 0.05, (v) => onSfx('pole', b, v));
+      for (const s of SEGS) { const c = closestSeg(b.x, b.y, s[0], s[1], s[2], s[3]); hitPoint(b, c[0], c[1], s[4], 0.45, 0.05, (v) => onSfx('pole', b, v)); }
+      if (b.y > -BR) {
+        b.y = -BR;
+        if (b.vy > 70) { onSfx('floor', b, b.vy); b.vy = -b.vy * 0.68; b.vx *= 0.92; } else b.vy = 0;
+      }
+      if (b.y >= -BR - 0.01 && Math.abs(b.vy) < 1) {
+        const dec = 70 * dt; b.vx = Math.abs(b.vx) <= dec ? 0 : b.vx - Math.sign(b.vx) * dec; b.w = b.vx / BR;
+      }
+    }
+    for (let i = 0; i < balls.length; i++) {
+      for (let j = i + 1; j < balls.length; j++) {
+        const a = balls[i], c = balls[j], dx = c.x - a.x, dy = c.y - a.y, d = Math.hypot(dx, dy);
+        if (d >= 2 * BR || d === 0) continue;
+        const grounded = a.y > -BR - 3 && c.y > -BR - 3;
+        const nx = grounded ? (dx >= 0 ? 1 : -1) : dx / d;
+        const ny = grounded ? 0 : dy / d;
+        const ov = grounded ? (2 * BR - Math.abs(dx)) / 2 : (2 * BR - d) / 2;
+        if (ov <= 0) continue;
+        a.x -= nx * ov; a.y -= ny * ov; c.x += nx * ov; c.y += ny * ov;
+        const rv = (c.vx - a.vx) * nx + (c.vy - a.vy) * ny;
+        if (rv < 0) { const imp = (-(1 + 0.4) * rv) / 2; a.vx -= imp * nx; a.vy -= imp * ny; c.vx += imp * nx; c.vy += imp * ny; }
+      }
+    }
+  }
+
+  /* ==================== 4. COURT RENDERING ==================== */
+  const WOBBLE = Array.from({ length: 512 }, (_, i) => Math.sin(i * 0.37) * 0.35 + Math.sin(i * 1.71 + 1) * 0.22);
+  const line = (c, x0, y0, x1, y1) => { c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); };
+  function drawGround(c, xl, xr) {
+    c.fillStyle = PAL.floor; c.fillRect(xl, 0, xr - xl, 600);
+    c.strokeStyle = COL.ink; c.lineWidth = 2.2; c.lineCap = 'round'; c.beginPath();
+    const x0 = Math.floor(xl / 6) * 6;
+    for (let x = x0; x <= xr + 6; x += 6) {
+      const w = WOBBLE[((x / 6) % 512 + 512) % 512];
+      if (x === x0) c.moveTo(x, w); else c.lineTo(x, w);
+    }
+    c.stroke();
+  }
+  function contactShadow(c, x, w, a) { c.save(); c.fillStyle = `rgba(0,0,0,${a})`; c.beginPath(); c.ellipse(x, 1.2, w, 2.4, 0, 0, Math.PI * 2); c.fill(); c.restore(); }
+  function inkShape(c, fill, lw) { c.fillStyle = fill; c.fill(); c.lineWidth = lw || 1.5; c.strokeStyle = COL.ink; c.lineJoin = 'round'; c.stroke(); }
+  function inkBar(c, x0, y0, x1, y1, w, fill) { c.lineCap = 'round'; c.strokeStyle = COL.ink; c.lineWidth = w + 3; line(c, x0, y0, x1, y1); c.strokeStyle = fill; c.lineWidth = w; line(c, x0, y0, x1, y1); }
+  function drawStatic(c) {
+    c.beginPath(); c.moveTo(562, 0.5); c.lineTo(563.5, -9); c.lineTo(585, -9.5); c.lineTo(586.5, 0.5); c.closePath(); inkShape(c, PAL.concrete, 1.5);
+    c.beginPath(); c.rect(571, -272, 6, 263); inkShape(c, PAL.sage, 1.5);
+    inkBar(c, 519, -262, 573, -262, 2.6, PAL.sage); inkBar(c, 519, -234.2, 573, -234.2, 2.6, PAL.sage); inkBar(c, 531, -236, 570, -259.5, 2, PAL.sage);
+    c.beginPath(); c.moveTo(507, -284); c.lineTo(521, -281); c.lineTo(521, -206); c.lineTo(507, -209); c.closePath(); inkShape(c, PAL.cream, 1.6);
+    c.beginPath(); c.moveTo(510.5, -246); c.lineTo(517.5, -244.5); c.lineTo(517.5, -224); c.lineTo(510.5, -225.5); c.closePath(); c.lineWidth = 1.1; c.strokeStyle = COL.ink; c.stroke();
+  }
+  function drawBall(c, x, y, rot) {
+    c.save(); c.translate(x, y);
+    c.beginPath(); c.arc(0, 0, BR + 0.7, 0, Math.PI * 2); c.fillStyle = COL.ink; c.fill();
+    c.beginPath(); c.arc(0, 0, BR - 0.6, 0, Math.PI * 2); c.fillStyle = PAL.ball; c.fill();
+    c.save(); c.clip();
+    c.fillStyle = PAL.ballD; c.beginPath(); c.arc(2.2, 2.6, BR, 0, Math.PI * 2); c.arc(-1.2, -1.4, BR - 0.4, 0, Math.PI * 2, true); c.fill();
+    c.rotate(rot); c.strokeStyle = COL.ink; c.lineWidth = 1.05; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(0, -BR); c.lineTo(0, BR); c.moveTo(-BR, 0.3); c.lineTo(BR, 0.3);
+    c.moveTo(-BR * 0.62, -BR); c.quadraticCurveTo(-1.6, 0, -BR * 0.62, BR);
+    c.moveTo(BR * 0.62, -BR); c.quadraticCurveTo(1.6, 0, BR * 0.62, BR); c.stroke();
+    c.restore(); c.restore();
+  }
+  function drawRack(c, items) {
+    for (const [x, y] of [[48, -54.5], [140, -47]]) inkBar(c, x, y, x, -8, 2.4, PAL.metal);
+    inkBar(c, 48, -16, 140, -16, 2, PAL.metal);
+    for (const x of [48, 140]) { c.beginPath(); c.arc(x, -4.2, 4, 0, Math.PI * 2); inkShape(c, PAL.shoe, 1.4); c.beginPath(); c.arc(x, -4.2, 1.2, 0, Math.PI * 2); c.fillStyle = COL.ink; c.fill(); }
+    c.beginPath(); c.moveTo(41, RACK.y0 - 2.2); c.lineTo(149, RACK.y1 - 2.2); c.lineTo(149, RACK.y1 + 2.6); c.lineTo(41, RACK.y0 + 2.6); c.closePath(); inkShape(c, PAL.wood, 1.4);
+    for (const it of items) { const p = rackSlot(it.s); c.globalAlpha = it.a; drawBall(c, p[0], p[1], it.rot + (it.s * 20) / BR * 0.6); c.globalAlpha = 1; }
+  }
+  function drawHoop(c, n) {
+    const s = n.swish, wob = Math.sin(n.t * 26) * s, levels = 5, rows = [];
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (let j = 0; j < levels; j++) {
+      const k = j / (levels - 1), y = RIM_Y + 2.5 + k * 26 * (1 + 0.28 * s * Math.sin(k * 3));
+      const hw = lerp(16, 10, k) * (1 + 0.12 * wob * k), cx = 487 + 1.5 * wob * k, pts = [], div = 6, odd = j % 2 === 1;
+      if (odd) { pts.push([cx - hw, y]); for (let i = 0; i < div; i++) pts.push([cx - hw + (2 * hw * (i + 0.5)) / div, y]); pts.push([cx + hw, y]); }
+      else { for (let i = 0; i <= div; i++) pts.push([cx - hw + (2 * hw * i) / div, y]); }
+      rows.push({ pts, odd, y, hw, cx });
+    }
+    c.strokeStyle = PAL.net; c.lineWidth = 1.25; c.beginPath();
+    for (let j = 0; j < levels - 1; j++) {
+      const A = rows[j], B = rows[j + 1];
+      if (!A.odd) {
+        for (let i = 0; i < A.pts.length; i++) {
+          const p = A.pts[i];
+          if (i > 0) { c.moveTo(p[0], p[1]); c.lineTo(B.pts[i][0], B.pts[i][1]); }
+          if (i < A.pts.length - 1) { c.moveTo(p[0], p[1]); c.lineTo(B.pts[i + 1][0], B.pts[i + 1][1]); }
+        }
+      } else {
+        for (let i = 1; i < A.pts.length - 1; i++) {
+          const p = A.pts[i];
+          c.moveTo(p[0], p[1]); c.lineTo(B.pts[i - 1][0], B.pts[i - 1][1]);
+          c.moveTo(p[0], p[1]); c.lineTo(B.pts[i][0], B.pts[i][1]);
+        }
+      }
+    }
+    const L = rows.map((r) => r.pts[0]), R = rows.map((r) => r.pts[r.pts.length - 1]);
+    c.moveTo(L[0][0], L[0][1]); for (const p of L) c.lineTo(p[0], p[1]);
+    c.moveTo(R[0][0], R[0][1]); for (const p of R) c.lineTo(p[0], p[1]);
+    c.stroke();
+    const last = rows[levels - 1]; c.lineWidth = 1.5; c.beginPath(); c.ellipse(last.cx, last.y, last.hw, 1, 0, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = COL.ink; c.lineWidth = 4.4; c.beginPath(); c.ellipse(487, RIM_Y, 18, 2.6, 0, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = PAL.rim; c.lineWidth = 2.2; c.stroke();
+    c.lineCap = 'butt'; inkBar(c, 504, RIM_Y + 0.5, 508, RIM_Y + 0.5, 2.4, PAL.rim);
+  }
+  function reach(a, b, max) { const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy); return d <= max ? b : [a[0] + (dx / d) * max, a[1] + (dy / d) * max]; }
+  function relax(sh, t, amt) { const dx = t[0] - sh[0], dy = t[1] - sh[1], d = Math.hypot(dx, dy), want = (UARM + FARM) * 0.96; if (dy <= 0 || d < 1 || d >= want) return t; const w = (amt ?? 1) * Math.min(1, Math.max(0, (dy / d - 0.8) / 0.18)), k = w * w * (3 - 2 * w), nd = d + (want - d) * k; return [sh[0] + (dx / d) * nd, sh[1] + (dy / d) * nd]; }
+  function elbow(sh, hand, fs, out, af) { const side = ik(sh, hand, UARM, FARM, null, -1 * fs); if (af >= 0.6) return side; return lerp2(ik(sh, hand, UARM, FARM, null, out), side, EASE.soft(af / 0.6)); }
+  function strokePath(c, pts, w, col) { c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]); c.stroke(); }
+
+  function drawFigure(c, a, x, breath, persona, clock) {
+    const p = Object.assign({}, a.pose);
+    if (breath) {
+      const up = (v, k) => [v[0], v[1] - breath * k];
+      p.head = up(p.head, 1); p.chest = up(p.chest, 0.85); p.hF = up(p.hF, 0.6); p.hB = up(p.hB, 0.6); p.ball = up(ballPos(p), 0.6);
+    }
+    const face = p.face, fs = face >= 0 ? 1 : -1, af = Math.min(1, Math.abs(face));
+    c.save(); c.translate(x, 0);
+    const sx = p.chest[0] - p.hip[0], sy = p.chest[1] - p.hip[1], sl = Math.hypot(sx, sy) || 1;
+    const u = [sx / sl, sy / sl], n = [-u[1], u[0]], sideOff = 6.2 * (1 - af);
+    const shF = [p.chest[0] + n[0] * sideOff - u[0], p.chest[1] + n[1] * sideOff - u[1]];
+    const shB = [p.chest[0] - n[0] * sideOff - u[0], p.chest[1] - n[1] * sideOff - u[1]];
+    const kF = ik(p.hip, p.fF, THIGH, SHIN, p.kF, fs), kB = ik(p.hip, p.fB, THIGH, SHIN, p.kB, fs);
+    const handF = reach(shF, p.hF, UARM + FARM), handB = reach(shB, relax(shB, p.hB, p.hang), UARM + FARM);
+    const eF = elbow(shF, handF, fs, 1, af), eB = elbow(shB, handB, fs, -1, af);
+    const hd = [p.head[0] - p.chest[0], p.head[1] - p.chest[1]], hl = Math.hypot(hd[0], hd[1]) || 1;
+    const hc = [p.chest[0] + (hd[0] / hl) * 20.5, p.chest[1] + (hd[1] / hl) * 20.5];
+
+    strokePath(c, [shB, eB, handB], 4.2, '#9a9a9a');
+    strokePath(c, [p.hip, kB, p.fB], 5, '#9a9a9a');
+    strokePath(c, [[p.hip[0] + u[0], p.hip[1] + u[1]], [p.chest[0] + u[0] * 0.5, p.chest[1] + u[1] * 0.5]], 8.5, COL.fig);
+    strokePath(c, [p.hip, kF, p.fF], 5, COL.fig);
+    c.fillStyle = COL.fig; c.beginPath(); c.arc(hc[0], hc[1], 7.8, 0, Math.PI * 2); c.fill();
+
+    // Persona ink accessories
+    const acc = persona?.accessory;
+    if (acc === 'ponytail') {
+      const dir = -fs * Math.max(0.35, af), sway = Math.sin(clock * 4.2) * 1.8, bx = hc[0] + dir * 7.3, by = hc[1] - 3.2;
+      c.strokeStyle = COL.fig; c.lineWidth = 4.2; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(bx, by); c.quadraticCurveTo(bx + dir * 10, by - 4 + sway * 0.4, bx + dir * 14, by + 9 + sway); c.stroke();
+      c.strokeStyle = persona.accentColor; c.lineWidth = 2.4; line(c, hc[0] - 6.5, hc[1] - 3.6, hc[0] + 6.5, hc[1] - 3.6);
+      c.fillStyle = '#fcd34d'; c.beginPath(); c.arc(bx, by, 2.3, 0, Math.PI * 2); c.fill();
+    } else if (acc === 'headband') {
+      c.strokeStyle = persona.accentColor; c.lineWidth = 2.6; line(c, hc[0] - 7.3, hc[1] - 2.6, hc[0] + 7.3, hc[1] - 2.6);
+      const dir = -fs * Math.max(0.3, af); c.lineWidth = 1.6; line(c, hc[0] + dir * 7.2, hc[1] - 2.6, hc[0] + dir * 13.5, hc[1] - 0.5 + Math.sin(clock * 5.2) * 1.4);
+    } else if (acc === 'spiky') {
+      c.fillStyle = COL.fig; c.beginPath(); c.moveTo(hc[0] - 6, hc[1] - 5); c.lineTo(hc[0] - 3, hc[1] - 12.5); c.lineTo(hc[0] + 0.5, hc[1] - 7); c.lineTo(hc[0] + 3.5, hc[1] - 13); c.lineTo(hc[0] + 6.2, hc[1] - 5); c.fill();
+      c.strokeStyle = persona.accentColor; c.lineWidth = 2.4; line(c, hc[0] - 7.3, hc[1] - 2.8, hc[0] + 7.3, hc[1] - 2.8);
+    } else if (acc === 'glasses') {
+      c.strokeStyle = persona.accentColor; c.lineWidth = 1.3; c.beginPath(); c.arc(hc[0] + fs * af * 3.8, hc[1] - 0.8, 2.8, 0, Math.PI * 2); c.stroke();
+    }
+
+    if (a.hasBall) drawBall(c, p.ball[0], p.ball[1], a.ballRot);
+    const arm = [shF, eF, handF];
+    if (p.flick > 0.05) {
+      const ang = Math.atan2(handF[1] - eF[1], handF[0] - eF[0]) + 1.7 * fs;
+      arm.push([handF[0] + Math.cos(ang) * 4.5 * p.flick, handF[1] + Math.sin(ang) * 4.5 * p.flick]);
+    }
+    strokePath(c, arm, 4.2, COL.fig);
+    c.restore();
+  }
+
+  /* ==================== 5. AI CONTROLLER ==================== */
+  function gauss() {
+    let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  class AIController {
+    constructor(cb) { this.cb = cb; this.enabled = true; this.autoLoop = true; this.persona = null; this.phase = 'idle'; this.waitTimer = 0; this.targetCharge = SWEET_CHARGE; this.useDownswing = false; this.reachedPeak = false; this.lastCharge = 0; this.lastMiss = false; this.restartTimer = 0; }
+    setPersona(p) { this.persona = p; this.resetShot(); }
+    setEnabled(flag) { if (this.enabled && !flag && this.phase === 'charging') this.cb.pressUp(true); this.enabled = flag; this.resetShot(); }
+    setAutoLoop(flag) { this.autoLoop = flag; if (!flag && this.phase === 'restarting') this.phase = 'idle'; }
+    resetShot() { this.phase = 'idle'; this.waitTimer = 0; this.reachedPeak = false; this.lastCharge = 0; this.restartTimer = 0; }
+    onShotResolved(made) { this.lastMiss = !made; }
+    planShot(streak) {
+      const ai = this.persona?.ai; if (!ai) return;
+      this.waitTimer = ai.thinkDelay[0] + Math.random() * (ai.thinkDelay[1] - ai.thinkDelay[0]);
+      let sigma = ai.jitter;
+      if (streak >= 2) sigma = Math.max(0.011, sigma - Math.min(streak, 5) * ai.streakTighten);
+      if (streak >= 6) sigma += ai.nervesAtSix;
+      if (this.lastMiss) sigma *= ai.missRecovery;
+      this.targetCharge = Math.max(0.42, Math.min(0.76, ai.targetCharge + ai.bias + gauss() * sigma));
+      this.useDownswing = Math.random() < ai.preferDownswing;
+      this.reachedPeak = false; this.lastCharge = 0; this.phase = 'waiting';
+    }
+    update(dt, st) {
+      if (!this.enabled || !this.persona?.isAI) return;
+      if (st.mode === 'over') {
+        if (!this.autoLoop) return;
+        if (this.phase !== 'restarting') { this.phase = 'restarting'; this.restartTimer = 3.4; }
+        this.restartTimer -= dt;
+        this.cb.onRestartCountdown(Math.max(0, this.restartTimer));
+        if (this.restartTimer <= 0) { this.phase = 'idle'; this.cb.startNextRound(); }
+        return;
+      }
+      if (st.mode !== 'play') return;
+      if (st.state === 'ready') {
+        if (this.phase === 'idle' || this.phase === 'cooldown' || this.phase === 'restarting') this.planShot(st.streak);
+        if (this.phase === 'waiting') {
+          this.waitTimer -= dt;
+          if (this.waitTimer <= 0) {
+            this.phase = 'charging'; this.lastCharge = 0; this.reachedPeak = false;
+            this.cb.pressDown(true); this.cb.onChargeStart(this.targetCharge);
+          }
+        }
+      } else if (st.state === 'charge' && this.phase === 'charging') {
+        const c = st.charge, rising = c >= this.lastCharge;
+        if (!rising && this.lastCharge > 0.85) this.reachedPeak = true;
+        const releaseNow = !this.useDownswing ? c >= this.targetCharge : (this.reachedPeak && !rising && c <= this.targetCharge);
+        this.lastCharge = c;
+        if (releaseNow) { this.phase = 'cooldown'; this.cb.pressUp(true); }
+      } else if (st.state === 'shoot' || st.state === 'done') {
+        if (this.phase === 'charging') this.phase = 'cooldown';
+      }
+    }
+  }
+
+  /* ==================== 6. STREAMER PIP & KEYBOARD DECK ==================== */
+  const $ = (id) => document.getElementById(id);
+
+  class StreamerPip {
+    constructor() {
+      this.el = $('streamerPip'); this.dragHandle = $('pipDragHandle');
+      this.nameEl = $('pipName'); this.viewersEl = $('pipViewers');
+      this.camStage = $('camStage'); this.actionChip = $('camActionChip');
+      this.subtitleEl = $('camSubtitle'); this.audioBars = $('audioBars');
+      this.customImg = $('camImgCustom');
+      this.fallbackCanvas = $('camFallbackCanvas'); this.fctx = this.fallbackCanvas.getContext('2d');
+      this.mkSpace = $('mkSpace'); this.kbSpaceFill = $('kbSpaceFill'); this.kbSpaceText = $('kbSpaceText');
+      this.kbPowerVal = $('kbPowerVal'); this.kbHoldVal = $('kbHoldVal');
+      this.miniKeys = { W: $('mkW'), A: $('mkA'), S: $('mkS'), D: $('mkD'), R: $('mkR') };
+      this.persona = null; this.customPhotoUrl = null; this.camState = 'idle';
+      this.stateResetTimer = null; this.talkTimer = null; this.sizeIdx = 1;
+      this.viewers = 2680; this.spaceDown = false; this.holdStartMs = 0;
+      this._initEvents(); this._startCamLoop();
+    }
+    _initEvents() {
+      let dragging = false, sx = 0, sy = 0, il = 0, it = 0;
+      this.dragHandle.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        dragging = true; const r = this.el.getBoundingClientRect();
+        il = r.left; it = r.top; sx = e.clientX; sy = e.clientY;
+        this.el.style.left = `${il}px`; this.el.style.top = `${it}px`; this.el.style.right = 'auto'; this.el.style.bottom = 'auto';
+        this.dragHandle.setPointerCapture(e.pointerId);
+      });
+      this.dragHandle.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        const nx = Math.max(8, Math.min(window.innerWidth - this.el.offsetWidth - 8, il + e.clientX - sx));
+        const ny = Math.max(8, Math.min(window.innerHeight - this.el.offsetHeight - 8, it + e.clientY - sy));
+        this.el.style.left = `${nx}px`; this.el.style.top = `${ny}px`;
+      });
+      const end = () => { dragging = false; };
+      this.dragHandle.addEventListener('pointerup', end); this.dragHandle.addEventListener('pointercancel', end);
+
+      $('pipSizeBtn').addEventListener('click', () => {
+        this.sizeIdx = (this.sizeIdx + 1) % 3;
+        this.el.classList.remove('size-sm', 'size-lg');
+        if (this.sizeIdx === 0) this.el.classList.add('size-sm');
+        if (this.sizeIdx === 2) this.el.classList.add('size-lg');
+      });
+      $('pipCloseBtn').addEventListener('click', () => { this.setVisible(false); $('btnPipToggle').classList.remove('active'); });
+
+      const applyFile = (file) => {
+        if (!file || !file.type.startsWith('image/')) return;
+        if (this.customPhotoUrl) URL.revokeObjectURL(this.customPhotoUrl);
+        this.customPhotoUrl = URL.createObjectURL(file);
+        this.customImg.onload = () => { this.camStage.classList.add('has-photo'); this.customImg.classList.add('active'); };
+        this.customImg.src = this.customPhotoUrl;
+        this.say('换上新真人主播照片啦！开播继续投篮～');
+      };
+      $('pipUploadBtn').addEventListener('click', () => $('pipPhotoInput').click());
+      $('pipPhotoInput').addEventListener('change', (e) => applyFile(e.target.files?.[0]));
+      this.el.addEventListener('dragover', (e) => e.preventDefault());
+      this.el.addEventListener('drop', (e) => { e.preventDefault(); applyFile(e.dataTransfer?.files?.[0]); });
+    }
+    setVisible(v) { this.el.classList.toggle('hidden', !v); }
+    isVisible() { return !this.el.classList.contains('hidden'); }
+    setPersona(p) {
+      this.persona = p; this.nameEl.textContent = p.roomTitle;
+      this.viewers = p.baseViewers + Math.floor(Math.random() * 240);
+      this.viewersEl.textContent = `👁 ${this.viewers.toLocaleString()}`;
+      this.setAction('idle', '准备瞄准');
+    }
+    setAction(state, label, autoResetMs = 0) {
+      clearTimeout(this.stateResetTimer);
+      this.camState = state; this.camStage.dataset.state = state;
+      this.actionChip.textContent = label; this.actionChip.className = 'cam-status-chip';
+      if (state === 'press') this.actionChip.classList.add('holding');
+      else if (state === 'cheer') this.actionChip.classList.add('cheer');
+      else if (state === 'miss') this.actionChip.classList.add('miss');
+      if (autoResetMs > 0) this.stateResetTimer = setTimeout(() => { if (!this.spaceDown) this.setAction('idle', '等待下一球'); }, autoResetMs);
+    }
+    say(text, speak = true) {
+      if (!text) return;
+      this.subtitleEl.textContent = text;
+      this.subtitleEl.classList.remove('pop'); void this.subtitleEl.offsetWidth; this.subtitleEl.classList.add('pop');
+      this.audioBars.classList.add('talking');
+      clearTimeout(this.talkTimer);
+      this.talkTimer = setTimeout(() => this.audioBars.classList.remove('talking'), Math.min(3200, Math.max(1200, text.length * 115)));
+      if (speak && this.persona?.tts) speakLine(text, this.persona.tts);
+    }
+    bumpViewers(d) { this.viewers = Math.max(120, this.viewers + d); this.viewersEl.textContent = `👁 ${this.viewers.toLocaleString()}`; }
+    setSpacePressed(pressed) {
+      this.spaceDown = pressed; this.mkSpace.classList.toggle('pressed', pressed);
+      if (pressed) {
+        this.holdStartMs = performance.now();
+        this.kbSpaceText.textContent = 'SPACE · 长按蓄力中...';
+        this.setAction('press', '⌨ 长按空格蓄力');
+        if (Math.random() < 0.35) this.flashKey(Math.random() < 0.5 ? 'A' : 'D', 140);
+      } else {
+        const held = this.holdStartMs ? Math.round(performance.now() - this.holdStartMs) : 0;
+        if (held > 0) this.kbHoldVal.textContent = `${held}ms`;
+        this.kbSpaceText.textContent = 'SPACE · 松手出手！';
+        setTimeout(() => { if (!this.spaceDown) { this.kbSpaceText.textContent = 'SPACE · 空格蓄力投篮'; this.kbSpaceFill.style.width = '0%'; } }, 360);
+      }
+    }
+    updateTelemetry(charge) {
+      if (!this.spaceDown) return;
+      const pct = Math.round(charge * 100);
+      this.kbPowerVal.textContent = `${pct}%`; this.kbSpaceFill.style.width = `${pct}%`;
+      this.kbHoldVal.textContent = `${Math.max(0, Math.round(performance.now() - this.holdStartMs))}ms`;
+    }
+    flashKey(l, ms = 160) { const el = this.miniKeys[l]; if (!el) return; el.classList.add('pressed'); setTimeout(() => el.classList.remove('pressed'), ms); }
+    _startCamLoop() {
+      const tick = (now) => { if (!this.camStage.classList.contains('has-photo') && this.isVisible()) this._drawDeskCam(now * 0.001); requestAnimationFrame(tick); };
+      requestAnimationFrame(tick);
+    }
+    _drawDeskCam(t) {
+      const cv = this.fallbackCanvas, w = 480, h = 300;
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      const c = this.fctx, pid = this.persona?.id || 'campus_girl', pal = this.persona?.outfitPalette || PERSONAS.campus_girl.outfitPalette;
+      const isGirl = pid === 'campus_girl' || pid === 'chill_scholar' || pid === 'human';
+      c.clearRect(0, 0, w, h);
+
+      // Sunlit dorm backdrop
+      const bgG = c.createLinearGradient(0, 0, w, h);
+      bgG.addColorStop(0, pal.roomWall); bgG.addColorStop(0.65, '#eae2d7'); bgG.addColorStop(1, '#d9cfc2');
+      c.fillStyle = bgG; c.fillRect(0, 0, w, h);
+      const sunG = c.createRadialGradient(72, 48, 12, 72, 48, 220);
+      sunG.addColorStop(0, 'rgba(255,250,232,0.92)'); sunG.addColorStop(1, 'rgba(255,241,206,0)');
+      c.fillStyle = sunG; c.fillRect(0, 0, w, h);
+
+      // Shelf & basketball
+      c.fillStyle = 'rgba(138,111,86,0.38)'; c.fillRect(326, 86, 134, 8);
+      const bx = 382, by = 62, br = 23;
+      const bG = c.createRadialGradient(bx - 7, by - 7, 3, bx, by, br);
+      bG.addColorStop(0, '#f7a55b'); bG.addColorStop(0.7, '#d97328'); bG.addColorStop(1, '#9e4710');
+      c.fillStyle = bG; c.beginPath(); c.arc(bx, by, br, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(65,30,12,0.45)'; c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(bx - br, by); c.lineTo(bx + br, by); c.moveTo(bx, by - br); c.lineTo(bx, by + br); c.stroke();
+
+      c.fillStyle = 'rgba(255,255,255,0.45)'; c.fillRect(0, 0, 56, 215);
+      c.fillStyle = 'rgba(64,132,86,0.45)';
+      c.beginPath(); c.ellipse(54, 152, 26, 12, -0.42, 0, Math.PI * 2); c.ellipse(74, 142, 22, 10, 0.5, 0, Math.PI * 2); c.fill();
+
+      const breathe = Math.sin(t * 2.1) * 2, lean = this.camState === 'press' ? 7 : 0, lift = this.camState === 'cheer' ? -9 : 0;
+      const swayX = this.camState === 'miss' ? Math.sin(t * 14) * 3.5 : 0;
+      const cx = w * 0.5 + swayX, cy = 128 + breathe + lean + lift;
+
+      // High ponytail / bob hair back
+      if (this.persona?.accessory === 'ponytail') {
+        const sw = Math.sin(t * 3) * 5.5 + (this.camState === 'cheer' ? -6 : 0);
+        c.fillStyle = pal.hair; c.beginPath(); c.moveTo(cx + 22, cy - 48);
+        c.bezierCurveTo(cx + 72, cy - 64 + sw * 0.4, cx + 92 + sw, cy - 12, cx + 76 + sw, cy + 36);
+        c.bezierCurveTo(cx + 62 + sw * 0.5, cy + 16, cx + 46, cy - 6, cx + 26, cy - 22); c.fill();
+        c.fillStyle = pal.ribbon; c.beginPath(); c.ellipse(cx + 31, cy - 44, 10, 6, 0.42, 0, Math.PI * 2); c.fill();
+      } else if (pid === 'chill_scholar') {
+        c.fillStyle = pal.hair; c.beginPath(); c.ellipse(cx, cy - 4, 46, 54, 0, 0, Math.PI * 2); c.fill();
+      }
+
+      // Varsity jacket / jersey
+      const bodyG = c.createLinearGradient(cx - 86, cy + 30, cx + 86, 240);
+      bodyG.addColorStop(0, pal.jacket); bodyG.addColorStop(1, pid === 'basketball_bro' ? '#142947' : '#eceef2');
+      c.fillStyle = bodyG; c.beginPath(); c.moveTo(cx - 90, 240); c.quadraticCurveTo(cx - 78, cy + 38, cx - 28, cy + 32);
+      c.lineTo(cx + 28, cy + 32); c.quadraticCurveTo(cx + 78, cy + 38, cx + 90, 240); c.fill();
+      c.strokeStyle = pal.stripe; c.lineWidth = 6; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(cx - 52, cy + 44); c.lineTo(cx - 66, 224); c.moveTo(cx + 52, cy + 44); c.lineTo(cx + 66, 224); c.stroke();
+      c.fillStyle = pid === 'basketball_bro' ? '#ffffff' : '#fef3c7';
+      c.beginPath(); c.moveTo(cx - 19, cy + 32); c.lineTo(cx, cy + 72); c.lineTo(cx + 19, cy + 32); c.fill();
+      c.fillStyle = pal.stripe; c.font = '700 16px sans-serif'; c.textAlign = 'center';
+      c.fillText(pid === 'basketball_bro' ? '11' : pid === 'sports_boy' ? '23' : '07', cx + 26, cy + 74);
+
+      // Neck & Face
+      c.fillStyle = pal.skin; c.fillRect(cx - 12, cy + 16, 24, 24);
+      const faceG = c.createRadialGradient(cx - 12, cy - 22, 6, cx, cy - 12, 46);
+      faceG.addColorStop(0, '#fff0e4'); faceG.addColorStop(0.7, pal.skin); faceG.addColorStop(1, '#ecc1a5');
+      c.fillStyle = faceG; c.beginPath(); c.ellipse(cx, cy - 12, 35, 42, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = isGirl ? 'rgba(244,114,130,0.24)' : 'rgba(220,130,110,0.12)';
+      c.beginPath(); c.ellipse(cx - 19, cy - 2, 8.5, 4.5, 0, 0, Math.PI * 2); c.ellipse(cx + 19, cy - 2, 8.5, 4.5, 0, 0, Math.PI * 2); c.fill();
+
+      // Eyes & expression
+      const blink = (t % 4.1) > 3.98, lookY = this.camState === 'press' ? 2.2 : 0;
+      if (this.camState === 'cheer') {
+        c.strokeStyle = '#1f2329'; c.lineWidth = 2.6;
+        c.beginPath(); c.arc(cx - 13, cy - 11, 6, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+        c.beginPath(); c.arc(cx + 13, cy - 11, 6, Math.PI * 1.1, Math.PI * 1.9); c.stroke();
+      } else if (blink) {
+        c.strokeStyle = '#1f2329'; c.lineWidth = 2.2;
+        line(c, cx - 19, cy - 12, cx - 7, cy - 12); line(c, cx + 7, cy - 12, cx + 19, cy - 12);
+      } else {
+        for (const s of [-1, 1]) {
+          const ex = cx + s * 13.5, ey = cy - 12 + lookY;
+          c.fillStyle = '#fff'; c.beginPath(); c.ellipse(ex, ey, 6.2, isGirl ? 5.2 : 4.2, 0, 0, Math.PI * 2); c.fill();
+          c.fillStyle = '#2b201c'; c.beginPath(); c.arc(ex, ey + 0.3, isGirl ? 4.2 : 3.5, 0, Math.PI * 2); c.fill();
+          c.fillStyle = '#fff'; c.beginPath(); c.arc(ex + 1.5, ey - 1.3, 1.5, 0, Math.PI * 2); c.fill();
+        }
+      }
+      c.strokeStyle = '#c86568'; c.lineWidth = 2.2; c.beginPath();
+      if (this.camState === 'cheer') { c.fillStyle = '#e57373'; c.arc(cx, cy + 6, 8.5, 0, Math.PI); c.fill(); }
+      else if (this.camState === 'press') { c.moveTo(cx - 5, cy + 8); c.lineTo(cx + 5, cy + 8); c.stroke(); }
+      else if (this.camState === 'miss') { c.arc(cx, cy + 12, 5.2, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); }
+      else { c.arc(cx, cy + 5, 7.5, 0.18, Math.PI - 0.18); c.stroke(); }
+
+      // Hair bangs
+      c.fillStyle = pal.hair; c.beginPath(); c.arc(cx, cy - 22, 38, Math.PI * 0.96, Math.PI * 2.04);
+      if (isGirl) {
+        c.lineTo(cx + 39, cy + 10); c.quadraticCurveTo(cx + 31, cy - 16, cx + 18, cy - 28);
+        c.quadraticCurveTo(cx + 7, cy - 16, cx + 2, cy - 29); c.quadraticCurveTo(cx - 9, cy - 16, cx - 18, cy - 28);
+        c.quadraticCurveTo(cx - 31, cy - 16, cx - 39, cy + 10);
+      } else {
+        c.lineTo(cx + 35, cy - 14); c.lineTo(cx + 12, cy - 24); c.lineTo(cx - 12, cy - 25); c.lineTo(cx - 35, cy - 14);
+      }
+      c.closePath(); c.fill();
+      if (this.persona?.accessory === 'headband' || this.persona?.accessory === 'spiky') {
+        c.strokeStyle = pal.ribbon; c.lineWidth = 6.5; c.beginPath(); c.arc(cx, cy - 18, 36.5, Math.PI * 1.14, Math.PI * 1.86); c.stroke();
+      } else if (this.persona?.accessory === 'glasses') {
+        c.strokeStyle = '#334155'; c.lineWidth = 1.8;
+        c.beginPath(); c.arc(cx - 13.5, cy - 11.5, 9.2, 0, Math.PI * 2); c.stroke();
+        c.beginPath(); c.arc(cx + 13.5, cy - 11.5, 9.2, 0, Math.PI * 2); c.stroke();
+        line(c, cx - 4.3, cy - 11.5, cx + 4.3, cy - 11.5);
+      }
+
+      // Desk & Mechanical keyboard
+      const deskG = c.createLinearGradient(0, 214, 0, h);
+      deskG.addColorStop(0, pal.desk); deskG.addColorStop(1, '#cba97c');
+      c.fillStyle = deskG; c.fillRect(0, 214, w, h - 214);
+      c.fillStyle = '#222630'; c.beginPath(); c.moveTo(96, 226); c.lineTo(384, 226); c.lineTo(404, 282); c.lineTo(76, 282); c.closePath(); c.fill();
+      if (this.spaceDown) {
+        const gl = c.createRadialGradient(240, 270, 8, 240, 270, 88);
+        gl.addColorStop(0, 'rgba(252,211,77,0.72)'); gl.addColorStop(1, 'rgba(252,211,77,0)');
+        c.fillStyle = gl; c.fillRect(140, 245, 200, 44);
+      }
+      for (let r = 0; r < 3; r++) {
+        for (let col = 0; col < 13; col++) {
+          c.fillStyle = pal.keycap; c.fillRect(104 + col * 21.4 - r * 3.2, 232 + r * 11, 17, 8);
+        }
+      }
+      const drop = this.spaceDown ? 3.5 : 0;
+      c.fillStyle = this.spaceDown ? '#f59e0b' : '#fde68a';
+      c.fillRect(166, 267 + drop, 148, 10 - drop * 0.35);
+
+      // Hands operating keyboard
+      if (this.camState === 'cheer') {
+        for (const s of [-1, 1]) {
+          const hx = cx + s * 72, hy = cy + 20 + Math.sin(t * 12) * 3;
+          c.strokeStyle = pal.jacket; c.lineWidth = 22; line(c, cx + s * 66, 224, hx, hy + 16);
+          c.fillStyle = pal.skin; c.beginPath(); c.arc(hx, hy, 14, 0, Math.PI * 2); c.fill();
+        }
+      } else {
+        const lh = Math.sin(t * 2.5) * 1.5, rp = this.spaceDown ? 6.5 : Math.sin(t * 3.1 + 0.8) * 1.4;
+        c.strokeStyle = pal.jacket; c.lineWidth = 24;
+        line(c, cx - 76, 232, 146, 250 + lh); line(c, cx + 76, 232, 306, 252 + rp * 0.5);
+        c.fillStyle = pal.skin;
+        c.beginPath(); c.ellipse(154, 248 + lh, 20, 12, 0.16, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(290, 252 + rp, 22, 12.5, -0.18, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.ellipse(260, 263 + rp, 13, 6.5, 0.25, 0, Math.PI * 2); c.fill();
+      }
+    }
+  }
+
+  /* ==================== 7. DANMAKU ==================== */
+  const VIEWERS = ['三分球小王子', '校门口煎饼果子', '摸鱼观察员', '晚风吹过球场', '机械键盘爱好者', '库里迷弟', '体院小师弟', '晴天打球去'];
+  class DanmakuSystem {
+    constructor(onUser) {
+      this.layer = $('danmakuLayer'); this.panel = $('chatPanel'); this.list = $('chatMessages');
+      this.input = $('chatInput'); this.hotTag = $('chatHotTag');
+      this.onUser = onUser; this.enabled = false; this.hot = 9.8; this.timer = 0;
+      $('chatForm').addEventListener('submit', (e) => {
+        e.preventDefault(); const t = this.input.value.trim(); if (!t) return;
+        this.input.value = ''; this.push('我', t, { isUser: true, hot: true }); if (this.onUser) this.onUser(t);
+      });
+    }
+    setEnabled(f) { this.enabled = f; this.panel.classList.toggle('collapsed', !f); if (!f) this.layer.innerHTML = ''; }
+    push(u, txt, opts = {}) {
+      if (!txt) return;
+      const d = document.createElement('div'); d.className = `chat-msg${opts.isUser ? ' me' : ''}`;
+      const s = document.createElement('span'); s.className = 'u'; s.textContent = `${u}:`;
+      d.appendChild(s); d.appendChild(document.createTextNode(txt)); this.list.appendChild(d);
+      while (this.list.children.length > 40) this.list.firstChild.remove();
+      this.list.scrollTop = this.list.scrollHeight;
+      this.hot = Math.min(99.9, this.hot + (opts.hot ? 0.3 : 0.1));
+      this.hotTag.textContent = `热度 ${this.hot.toFixed(1)}w`;
+      if (!this.enabled) return;
+      const el = document.createElement('div');
+      el.className = `dm-item${opts.hot ? ' hot' : ''}${opts.isUser ? ' user' : ''}`;
+      el.textContent = opts.isUser ? `★ ${txt}` : txt;
+      const dur = 6.5 + Math.random() * 3.2;
+      el.style.top = `${14 + Math.random() * 44}%`; el.style.animationDuration = `${dur}s`;
+      this.layer.appendChild(el); setTimeout(() => el.remove(), dur * 1000 + 200);
+    }
+    pushViewer(txt, hot = false) { this.push(pickRandom(VIEWERS), txt, { hot }); }
+    tick(dt, p) {
+      if (!this.enabled || !p?.danmaku?.ambient) return;
+      this.timer -= dt;
+      if (this.timer <= 0) { this.timer = 3.2 + Math.random() * 4.5; this.pushViewer(pickRandom(p.danmaku.ambient)); }
+    }
+  }
+
+  /* ==================== 8. MAIN GAME LOOP ==================== */
+  const VIEW = { x0: 26, x1: 600, y0: -318, y1: 26 };
+  const cv = $('gameCanvas'), ctx = cv.getContext('2d');
+  let dpr = 1, cw = 0, ch = 0, cam = { s: 1, x: 0, y: 0 };
+  const life = { best: 0, games: 0, shots: 0, makes: 0, bestStreak: 0, seenHint: false };
+  const me = new Actor();
+  let balls = [], rack = { items: [], reserve: 0 }, net = { swish: 0, t: 0 }, popups = [], bits = [];
+  let mode = 'menu', state = 'ready', chargeT = 0, charge = 0, pressed = false, holdBlock = false;
+  let clock = 0, doneAt = -1, lastRelease = null, prevRelease = null, round = null, lastResult = null;
+  let currentPersonaId = 'campus_girl', currentPersona = PERSONAS[currentPersonaId];
+
+  const pip = new StreamerPip();
+  const danmaku = new DanmakuSystem((txt) => {
+    if (txt.includes('哥哥') || txt.includes('陈默')) return selectPersona('basketball_bro', true);
+    if (txt.includes('美女') || txt.includes('小夏')) return selectPersona('campus_girl', true);
+    if (txt.includes('体育生') || txt.includes('阿凯')) return selectPersona('sports_boy', true);
+    if (txt.includes('学霸') || txt.includes('晚晚')) return selectPersona('chill_scholar', true);
+    if (txt.includes('加油') || txt.includes('666') || txt.includes('空心')) {
+      pip.bumpViewers(12); pip.say(`谢谢弹幕的“${txt}”！下一球给你投个纯空心～`);
+    }
+  });
+  const ai = new AIController({
+    pressDown: (f) => down(f),
+    pressUp: (f) => up(f),
+    startNextRound: () => startGame(),
+    onChargeStart: (tc) => { $('aiTargetHint').textContent = `AI 瞄准 ${Math.round(tc * 100)}%`; if (Math.random() < 0.42) pip.say(pickRandom(currentPersona.lines.charge), false); },
+    onRestartCountdown: (sec) => { $('againBtnText').textContent = `自动下一轮 (${Math.ceil(sec)}s)`; },
+  });
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 3);
+    cw = window.innerWidth; ch = window.innerHeight;
+    cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+    const narrow = cw < ch, top = narrow ? 140 : 112, bottom = 68;
+    const x0 = narrow ? 36 : VIEW.x0, x1 = narrow ? 588 : VIEW.x1, vw = x1 - x0, vh = VIEW.y1 - VIEW.y0;
+    const s = Math.min((cw - (narrow ? 12 : 120)) / vw, ((ch - top - bottom) * 0.84) / vh, 1.75);
+    const free = ch - top - bottom - vh * s;
+    cam = { s, x: (cw - vw * s) / 2 - x0 * s, y: top + free * 0.56 - VIEW.y0 * s };
+  }
+  window.addEventListener('resize', resize); resize();
+
+  let toastTimer = 0;
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2400); }
+
+  function sfx(kind, b, v) {
+    const k = Math.min(1, (v || 0) / 650);
+    if (kind === 'score') { net.swish = 1; SND.swish(!b.touched); resolveShot(b, true); return; }
+    if (kind === 'rim' || kind === 'board') b.touched = true;
+    if (kind === 'floor') { SND.bounce(k); if (!b.scored) resolveShot(b, false); }
+    else if (kind === 'rim') SND.rim(k);
+    else if (kind === 'board') SND.board(k);
+    else SND.pole(k);
+  }
+  const chargePeriod = () => 1.05 * Math.pow(0.92, Math.min(round ? round.streak : 0, 8));
+
+  function newRound() {
+    round = { shots: [], score: 0, streak: 0, bestStreak: 0, swishes: 0 };
+    balls = []; rack.items = [0, 1, 2, 3, 4].map((i) => ({ rot: Math.random() * 6.28, s: i, a: 1 })); rack.reserve = ROUND - 6;
+    me.clear(); me.hasBall = true; me.push({ pose: P.hold, d: 0.3, ez: 'soft' });
+    state = 'ready'; doneAt = -1; lastRelease = null; prevRelease = null; popups = [];
+    ai.resetShot(); $('aiTargetHint').textContent = '';
+  }
+  function releaseBall(vx, vy) {
+    if (!me.hasBall) return;
+    me.hasBall = false; const bp = me.pose.ball || ballPos(me.pose);
+    const b = newBall(AX + bp[0], bp[1], vx, vy, -6); b.shot = round.shots.length; b.rel = lastRelease;
+    round.shots.push({ made: null, swish: false }); balls.push(b); life.shots++; SND.release(); updateHud();
+  }
+  function grab() {
+    if (!rack.items.length) return false;
+    const it = rack.items.pop(); SND.grab(); me.ballRot = it.rot; me.hasBall = true;
+    if (rack.reserve > 0) { rack.reserve--; rack.items.unshift({ rot: Math.random() * 6.28, s: -1.2, a: 0 }); }
+    return true;
+  }
+  function burst(n, hot) {
+    const cols = hot ? ['#141414', '#b45309', '#fcd34d', '#8d8d8d'] : ['#141414', '#8d8d8d', '#c8c8c8'];
+    for (let i = 0; i < n; i++) {
+      const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, sp = 70 + Math.random() * 110;
+      bits.push({ x: 487 + (Math.random() - 0.5) * 30, y: RIM_Y - 4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 18, c: cols[i % cols.length], t: 0, life: 0.8 + Math.random() * 0.5, w: 2.2 + Math.random() * 1.8 });
+    }
+  }
+  function resolveShot(b, made) {
+    if (b.resolved || b.shot === undefined || !round) return;
+    b.resolved = true; const rec = round.shots[b.shot]; if (!rec) return;
+    rec.made = made; if (b.rel) b.rel.made = made; ai.onShotResolved(made);
+    if (made) {
+      life.makes++; round.streak++; round.bestStreak = Math.max(round.bestStreak, round.streak);
+      const swish = !b.touched; rec.swish = swish; if (swish) round.swishes++;
+      const mult = round.streak >= 6 ? 3 : round.streak >= 3 ? 2 : 1, pts = (swish ? 3 : 2) * mult;
+      round.score += pts;
+      const subs = []; if (swish) subs.push('空心 SWISH'); if (mult > 1) subs.push('×' + mult);
+      popups.push({ text: '+' + pts, sub: subs.join(' · '), hot: swish || mult > 1, quiet: false, t: 0 });
+      burst(swish ? 18 : 9, swish || mult > 1);
+      const el = $('score'); el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump');
+      if (mult > 1 && (round.streak === 3 || round.streak === 6)) {
+        SND.streak(round.streak); pip.setAction('cheer', `🔥 ${round.streak}连中 ×${mult}`, 1500);
+        pip.say(pickRandom(currentPersona.lines.streak)); pip.bumpViewers(65); danmaku.pushViewer(pickRandom(currentPersona.danmaku.streak), true);
+      } else if (swish) {
+        pip.setAction('cheer', '✨ 空心入网 +3', 1300); pip.say(pickRandom(currentPersona.lines.swish));
+        pip.bumpViewers(25); danmaku.pushViewer(pickRandom(currentPersona.danmaku.swish), true);
+      } else {
+        pip.setAction('cheer', '🏀 稳稳命中', 950); if (Math.random() < 0.7) pip.say(pickRandom(currentPersona.lines.made));
+        pip.bumpViewers(10); if (Math.random() < 0.75) danmaku.pushViewer(pickRandom(currentPersona.danmaku.made));
+      }
+    } else {
+      round.streak = 0; popups.push({ text: '打铁', sub: '', hot: false, quiet: true, t: 0 });
+      pip.setAction('miss', '😅 差一点点', 1100); pip.say(pickRandom(currentPersona.lines.miss));
+      danmaku.pushViewer(pickRandom(currentPersona.danmaku.miss));
+    }
+    updateHud();
+  }
+  function shoot() {
+    state = 'shoot'; prevRelease = lastRelease; lastRelease = { c: charge, made: null, at: clock };
+    const v = V_MIN + charge * (V_MAX - V_MIN), vx = v * Math.cos(SHOT_ANGLE), vy = -v * Math.sin(SHOT_ANGLE);
+    me.clear();
+    me.push({ path: [P.rise, P.set], d: 0.15, ez: 'in' }, { fn: () => releaseBall(vx, vy) }, { pose: P.follow, d: 0.09, ez: 'out' }, { d: 0.32 }, {
+      fn: () => {
+        if (!rack.items.length) { me.push({ path: [P.drop, P.stand], d: 0.4, ez: 'soft' }, { fn: () => { state = 'done'; doneAt = clock; } }); return; }
+        me.push({ path: [P.drop, P.turn, P.bend], d: 0.78, ez: 'soft' }, { d: 0.04 }, { fn: () => grab() }, { path: [P.turnHold, P.hold], d: 0.46, ez: 'soft' }, {
+          fn: () => { state = 'ready'; if (pressed && !holdBlock && (!ai.enabled || !currentPersona.isAI)) startCharge(); },
+        });
+      },
+    });
+  }
+  function startCharge() { state = 'charge'; chargeT = 0; charge = 0; me.clear(); me.chargeFrom = me.pose; }
+  function startGame() {
+    ensureAudio(); newRound(); mode = 'play';
+    $('overlay').classList.remove('on'); $('hud').classList.remove('hidden');
+    const isManual = !ai.enabled || !currentPersona.isAI;
+    $('hint').classList.toggle('hidden', !isManual || life.seenHint);
+    $('againBtnText').textContent = '再来一轮';
+    pip.flashKey('R', 150); pip.setAction('idle', '新的一轮开始'); pip.say(pickRandom(currentPersona.lines.intro));
+    updateHud();
+  }
+  function endGame() {
+    mode = 'over'; life.games++;
+    const res = { score: round.score, swishes: round.swishes, personaName: currentPersona.name, personaTitle: currentPersona.title, shots: round.shots.map((s) => (s.made ? (s.swish ? 2 : 1) : 0)) };
+    const made = res.shots.filter((s) => s > 0).length, isBest = res.score > life.best;
+    life.best = Math.max(life.best, res.score); lastResult = res;
+    $('endRoundTitle').textContent = `${currentPersona.title} · ${currentPersona.name} 本轮战绩`;
+    $('endScore').textContent = res.score; $('endChip').style.display = isBest && res.score > 0 ? '' : 'none';
+    $('stAcc').textContent = Math.round((made / ROUND) * 100) + '%'; $('stSwish').textContent = res.swishes;
+    $('endShots').innerHTML = res.shots.map((s) => `<div class="dot ${s === 2 ? 'swish' : s === 1 ? 'made' : 'miss'}"></div>`).join('');
+    const lineTxt = res.score >= 30 ? pickRandom(currentPersona.lines.endHigh) : res.score >= 16 ? pickRandom(currentPersona.lines.endMid) : pickRandom(currentPersona.lines.endLow);
+    $('endComment').textContent = `“${lineTxt}”`; pip.say(lineTxt);
+    $('endFoot').textContent = `累计出手 ${life.shots} 次 · 命中率 ${Math.round((life.makes / Math.max(1, life.shots)) * 100)}% · 最高 ${life.best} 分`;
+    $('startCard').classList.remove('show'); $('endCard').classList.add('show'); $('overlay').classList.add('on');
+    $('hud').classList.add('hidden'); $('hint').classList.add('hidden');
+    if (made >= 7) {
+      pip.setAction('cheer', '🏆 高分完美收官', 2500);
+      me.clear(); me.push({ path: [P.drop, P.cheer], d: 0.5, ez: 'soft' }, { d: 0.45 }, { path: [P.drop, P.stand], d: 0.6, ez: 'soft' });
+    }
+  }
+  function updateHud() {
+    if (!round) return;
+    $('score').textContent = round.score; $('best').textContent = Math.max(life.best, round.score);
+    $('hudPersonaName').textContent = currentPersona.name;
+    $('hudModeTag').textContent = ai.enabled && currentPersona.isAI ? `${currentPersona.title} · AI托管` : '手动操控中';
+    const n = round.shots.length;
+    let html = '';
+    for (let i = 0; i < ROUND; i++) {
+      const s = round.shots[i];
+      const cls = s && s.made === true ? (s.swish ? 'swish' : 'made') : s && s.made === false ? 'miss' : s ? 'fly' : (i === n && (me.hasBall || rack.items.length)) ? 'next' : '';
+      html += `<div class="dot ${cls}"></div>`;
+    }
+    $('tracker').innerHTML = html;
+    $('ballLabel').textContent = n < ROUND ? `第 ${n + 1} / ${ROUND} 球` : '最后一球';
+    const st = $('streak'), s = round.streak;
+    if (s >= 2) { const m = s >= 6 ? 3 : s >= 3 ? 2 : 1; st.textContent = m > 1 ? `🔥 ${s} 连中 · ×${m} 倍积分` : `✨ ${s} 连中`; st.classList.add('on'); }
+    else st.classList.remove('on');
+  }
+  function down(fromAI = false) {
+    ensureAudio();
+    if (!fromAI && ai.enabled && currentPersona.isAI && mode === 'play') { setAutoPlay(false); toast('已切换为手动接管！'); }
+    pressed = true; if (mode !== 'play') return;
+    if (state === 'ready') { SND.keyDown(); pip.setSpacePressed(true); startCharge(); }
+  }
+  function up(fromAI = false) {
+    if (!fromAI && ai.enabled && currentPersona.isAI) return;
+    pressed = false; holdBlock = false;
+    if (state === 'charge') { SND.keyUp(); pip.setSpacePressed(false); shoot(); if (!fromAI) { life.seenHint = true; $('hint').classList.add('hidden'); } }
+  }
+  function selectPersona(id, notify = true) {
+    if (!PERSONAS[id]) return;
+    currentPersonaId = id; currentPersona = PERSONAS[id]; $('personaSelect').value = id;
+    document.querySelectorAll('.p-card').forEach((c) => c.classList.toggle('selected', c.dataset.id === id));
+    ai.setPersona(currentPersona); pip.setPersona(currentPersona);
+    if (currentPersona.isAI) { setAutoPlay(true, false); $('playBtnText').textContent = `开始 ${currentPersona.name} AI 直播投篮`; }
+    else { setAutoPlay(false, false); $('playBtnText').textContent = '开始手动投篮'; }
+    updateHud();
+    if (notify) { pip.say(pickRandom(currentPersona.lines.intro)); toast(`已切换角色：${currentPersona.title} · ${currentPersona.name}`); }
+  }
+  function setAutoPlay(flag, showToast = false) {
+    ai.setEnabled(flag && currentPersona.isAI);
+    const active = ai.enabled;
+    $('btnAutoPlay').classList.toggle('active', active);
+    $('autoPlayText').textContent = active ? 'AI托管中' : '手动模式';
+    $('hint').classList.toggle('hidden', mode !== 'play' || active || life.seenHint);
+    if (!active) $('aiTargetHint').textContent = '';
+    updateHud();
+    if (showToast) toast(active ? `${currentPersona.name} 已接管键盘自动投篮` : '已切回手动模式：长按空格或屏幕投篮');
+  }
+
+  // Build Persona Grid
+  const grid = $('startPersonaGrid');
+  for (const id of PERSONA_ORDER) {
+    const p = PERSONAS[id], b = document.createElement('button');
+    b.type = 'button'; b.className = `p-card${id === currentPersonaId ? ' selected' : ''}${id === 'human' ? ' full-span' : ''}`; b.dataset.id = id;
+    b.innerHTML = `<div class="p-avatar">${p.emoji}</div><div class="p-info"><div class="p-name">${p.title} · ${p.name}</div><div class="p-desc">${p.desc}</div></div>`;
+    b.addEventListener('click', () => selectPersona(id, false));
+    grid.appendChild(b);
+  }
+
+  // Listeners
+  cv.addEventListener('pointerdown', (e) => { e.preventDefault(); if (mode === 'play') down(false); });
+  window.addEventListener('pointerup', () => up(false)); window.addEventListener('pointercancel', () => up(false));
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'SELECT') return;
+    if (e.code === 'KeyR' && !e.repeat) { e.preventDefault(); startGame(); return; }
+    if (e.code !== 'Space' && e.code !== 'Enter') return;
+    e.preventDefault(); if (e.repeat) return;
+    if (mode !== 'play') { holdBlock = true; startGame(); return; }
+    down(false);
+  });
+  window.addEventListener('keyup', (e) => { if (e.code === 'Space' || e.code === 'Enter') up(false); });
+  $('playBtn').addEventListener('click', startGame); $('againBtn').addEventListener('click', startGame);
+  $('personaSelect').addEventListener('change', (e) => selectPersona(e.target.value, true));
+  $('btnAutoPlay').addEventListener('click', () => { if (!currentPersona.isAI) selectPersona('campus_girl', true); else setAutoPlay(!ai.enabled, true); });
+  $('btnAutoLoop').addEventListener('click', (e) => { const n = !ai.autoLoop; ai.setAutoLoop(n); e.currentTarget.classList.toggle('active', n); toast(n ? '已开启直播自动连播' : '已关闭自动连播'); });
+  $('btnPipToggle').addEventListener('click', (e) => { const n = !pip.isVisible(); pip.setVisible(n); e.currentTarget.classList.toggle('active', n); });
+  $('btnDanmakuToggle').addEventListener('click', (e) => { const n = !danmaku.enabled; danmaku.setEnabled(n); e.currentTarget.classList.toggle('active', n); if (n) danmaku.pushViewer(pickRandom(currentPersona.danmaku.ambient)); });
+  $('btnTtsToggle').addEventListener('click', (e) => { soundState.ttsEnabled = !soundState.ttsEnabled; e.currentTarget.classList.toggle('active', soundState.ttsEnabled); toast(soundState.ttsEnabled ? '主播中文语音播报已开启' : '语音播报已静音'); });
+  $('btnSoundToggle').addEventListener('click', (e) => { soundState.enabled = !soundState.enabled; e.currentTarget.classList.toggle('active', soundState.enabled); if (soundState.enabled) ensureAudio(); });
+  $('btnStreamMode').addEventListener('click', () => { document.body.classList.add('stream-mode'); toast('已进入纯净直播画面（右上角可退出）'); });
+  $('exitStreamBtn').addEventListener('click', () => document.body.classList.remove('stream-mode'));
+  $('shareBtn').addEventListener('click', () => {
+    if (!lastResult) return;
+    const c = document.createElement('canvas'); c.width = 900; c.height = 1100; const sc = c.getContext('2d');
+    sc.fillStyle = '#fff'; sc.fillRect(0, 0, 900, 1100);
+    sc.fillStyle = COL.ink; sc.font = '700 180px sans-serif'; sc.fillText(String(lastResult.score), 70, 260);
+    sc.font = '700 32px sans-serif'; sc.fillStyle = COL.accent; sc.fillText(`${lastResult.personaTitle} · ${lastResult.personaName}`, 70, 320);
+    sc.save(); sc.translate(50, 1020); sc.scale(1.4, 1.4); drawGround(sc, -100, 800); drawStatic(sc); drawRack(sc, []); drawFigure(sc, { pose: P.follow, hasBall: false }, AX, 0, currentPersona, 0); drawBall(sc, 487, -207, 0.4); drawHoop(sc, { swish: 0, t: 0 }); sc.restore();
+    c.toBlob((blob) => { if (!blob) return; const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = `ten-balls-${lastResult.score}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(u), 2000); toast('战绩海报已下载'); });
+  });
+
+  function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+  function render() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, ch);
+    ctx.setTransform(dpr * cam.s, 0, 0, dpr * cam.s, dpr * cam.x, dpr * cam.y);
+    drawGround(ctx, -cam.x / cam.s - 2, (cw - cam.x) / cam.s + 2);
+    drawStatic(ctx); drawRack(ctx, rack.items);
+    contactShadow(ctx, AX + (me.pose.fF[0] + me.pose.fB[0]) / 2 + 1, 15, 0.14);
+    for (const b of balls) { const hgt = -b.y - BR; if (hgt < 140) contactShadow(ctx, b.x, BR * (0.5 + 0.5 * (1 - hgt / 140)), 0.2 * (1 - hgt / 140) * b.alpha); }
+    drawFigure(ctx, me, AX, me.breath * (Math.sin(clock * 2.1) + 1) * 0.5, currentPersona, clock);
+    for (const b of balls) { ctx.globalAlpha = b.alpha; drawBall(ctx, b.x, b.y, b.rot); }
+    ctx.globalAlpha = 1; drawHoop(ctx, net);
+    for (const b of bits) { ctx.save(); ctx.globalAlpha = Math.max(0, 1 - b.t / b.life); ctx.translate(b.x, b.y); ctx.rotate(b.r); ctx.fillStyle = b.c; ctx.fillRect(-b.w / 2, -0.9, b.w, 1.8); ctx.restore(); }
+    // Meter
+    if (state === 'charge' || (state === 'shoot' && lastRelease && clock - lastRelease.at < 0.65)) {
+      const w = 52, h = 5.5, x = AX - w / 2 + 6, y = -160, c = state === 'charge' ? charge : lastRelease.c;
+      ctx.save(); ctx.globalAlpha = state === 'charge' ? Math.min(1, chargeT / 0.12) : Math.max(0, 1 - (clock - lastRelease.at) / 0.65);
+      ctx.fillStyle = 'rgba(42,38,32,0.12)'; roundRect(ctx, x, y, w, h, h / 2); ctx.fill();
+      ctx.fillStyle = COL.ink; roundRect(ctx, x, y, Math.max(h, w * c), h, h / 2); ctx.fill();
+      if (prevRelease && prevRelease.made !== null) { ctx.fillStyle = prevRelease.made ? COL.accent : COL.muted; roundRect(ctx, x + w * prevRelease.c - 1, y - 3.5, 2, h + 7, 1); ctx.fill(); }
+      ctx.restore();
+    }
+    // Popups
+    for (const p of popups) {
+      const k = p.t / 1.1, a = k < 0.12 ? k / 0.12 : Math.max(0, 1 - (k - 0.55) / 0.45), y = -258 - 24 * EASE.out(Math.min(1, k * 1.3));
+      ctx.save(); ctx.globalAlpha = a; ctx.textAlign = 'center';
+      if (p.quiet) { ctx.fillStyle = COL.muted; ctx.font = '700 13px sans-serif'; ctx.fillText(p.text, 487, y + 6); }
+      else {
+        const sc = 1 + 0.22 * Math.max(0, 1 - k * 5); ctx.translate(487, y); ctx.scale(sc, sc);
+        ctx.fillStyle = p.hot ? COL.accent : COL.ink; ctx.font = '700 24px sans-serif'; ctx.fillText(p.text, 0, 0);
+        if (p.sub) { ctx.font = '700 10px sans-serif'; ctx.fillText(p.sub, 0, 13); }
+      }
+      ctx.restore();
+    }
+  }
+  function update(dt) {
+    clock += dt;
+    if (state === 'charge') {
+      chargeT += dt; const ph = (chargeT / chargePeriod()) % 2; charge = ph < 1 ? ph : 2 - ph;
+      me.pose = lerpPose(me.chargeFrom || P.hold, P.crouch, EASE.out(Math.min(1, chargeT / 0.32)));
+      pip.updateTelemetry(charge);
+    }
+    ai.update(dt, { mode, state, charge, chargeT, streak: round ? round.streak : 0 });
+    if (mode === 'play') danmaku.tick(dt, currentPersona);
+    me.update(dt); me.breath += (((state === 'ready' && me.idle) || mode !== 'play' ? 1 : 0) - me.breath) * Math.min(1, dt * 3);
+    for (let s = 0; s < 4; s++) stepBalls(balls, dt / 4, sfx);
+    const xl = -cam.x / cam.s, xr = (cw - cam.x) / cam.s;
+    for (let i = balls.length - 1; i >= 0; i--) {
+      const b = balls[i];
+      if (b.y >= -BR - 0.1 && Math.abs(b.vx) < 2 && Math.abs(b.vy) < 1) b.still += dt; else b.still = 0;
+      if (!b.resolved) { b.age = (b.age || 0) + dt; b.idle = Math.hypot(b.vx, b.vy) < 25 ? (b.idle || 0) + dt : 0; if ((!b.scored && b.y >= -BR - 0.5) || b.idle > 1 || b.age > 6) resolveShot(b, false); }
+      if (b.x < Math.min(xl, -40) - 40 || b.x > Math.max(xr, 760) + 40) { resolveShot(b, false); balls.splice(i, 1); continue; }
+      if (b.fading) { b.alpha -= dt * 1.5; if (b.alpha <= 0) { resolveShot(b, false); balls.splice(i, 1); } }
+    }
+    const settled = balls.filter((b) => b.still > 0.4 && !b.fading); if (settled.length > 6) settled[0].fading = true;
+    net.t += dt; net.swish = Math.max(0, net.swish - dt * 1.6);
+    rack.items.forEach((it, j) => { it.s += (5 - rack.items.length + j - it.s) * Math.min(1, dt * 7); it.a = Math.min(1, it.a + dt * 3); });
+    for (let i = popups.length - 1; i >= 0; i--) { popups[i].t += dt; if (popups[i].t > 1.1) popups.splice(i, 1); }
+    for (let i = bits.length - 1; i >= 0; i--) { const b = bits[i]; b.t += dt; b.vy += 260 * dt; b.vx *= 1 - 1.5 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.r += b.vr * dt; if (b.t > b.life) bits.splice(i, 1); }
+    if (mode === 'play' && state === 'done' && round.shots.every((s) => s.made !== null) && clock - doneAt > 0.9) endGame();
+  }
+
+  selectPersona('campus_girl', false);
+  let last = performance.now();
+  function frame(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; update(dt); render(); requestAnimationFrame(frame); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
