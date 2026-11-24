@@ -24,6 +24,7 @@ export const PERSONAS = {
       desk: '#e6c9a2',
       keycap: '#fffaf0',
     },
+    video: 'assets/campus_girl_live.mp4',
     photos: {
       idle: 'assets/campus_girl_idle.png',
       press: 'assets/campus_girl_press.png',
@@ -357,6 +358,7 @@ export const PERSONAS = {
       desk: '#e6c9a2',
       keycap: '#fffaf0',
     },
+    video: 'assets/campus_girl_live.mp4',
     photos: {
       idle: 'assets/campus_girl_idle.png',
       press: 'assets/campus_girl_press.png',

@@ -65,7 +65,9 @@ let lastResult = null;
 
 // Active persona
 let currentPersonaId = 'campus_girl';
+let lastAutoPersonaId = 'campus_girl';
 let currentPersona = PERSONAS[currentPersonaId];
+let roundSeq = 0;
 
 // Live studio modules
 const pip = new StreamerPip();
@@ -74,9 +76,7 @@ const ai = new AIController({
   pressDown: (fromAI) => down(fromAI),
   pressUp: (fromAI) => up(fromAI),
   startNextRound: () => startGame(),
-  onChargeStart: (targetC) => {
-    const pct = Math.round(targetC * 100);
-    $('aiTargetHint').textContent = `AI 瞄准 ${pct}%`;
+  onChargeStart: () => {
     if (Math.random() < 0.42) {
       pip.say(pickRandom(currentPersona.lines.charge), false);
     }
@@ -85,6 +85,8 @@ const ai = new AIController({
     $('againBtnText').textContent = `自动下一轮 (${Math.ceil(sec)}s)`;
   },
 });
+
+const isEndlessMode = () => ai.enabled && currentPersona.isAI;
 
 pip.onVisibilityChange = (vis) => {
   $('btnPipToggle').classList.toggle('active', vis);
@@ -155,11 +157,23 @@ function chargePeriod() {
   return 1.05 * Math.pow(0.92, Math.min(round ? round.streak : 0, 8));
 }
 
-function newRound() {
-  round = { shots: [], score: 0, streak: 0, bestStreak: 0, swishes: 0 };
-  balls = [];
+function newRound(keepBalls = false) {
+  roundSeq++;
+  round = {
+    id: roundSeq,
+    endless: isEndlessMode(),
+    shots: [],
+    score: 0,
+    streak: 0,
+    bestStreak: 0,
+    swishes: 0,
+    misses: 0,
+    makes: 0,
+    attempts: 0,
+  };
+  if (!keepBalls) balls = [];
   rack.items = [0, 1, 2, 3, 4].map((i) => ({ rot: Math.random() * 6.28, s: i, a: 1 }));
-  rack.reserve = ROUND - 6;
+  rack.reserve = isEndlessMode() ? Infinity : ROUND - 6;
   me.clear();
   me.hasBall = true;
   me.push({ pose: P.hold, d: 0.3, ez: 'soft' });
@@ -169,7 +183,7 @@ function newRound() {
   prevRelease = null;
   popups.length = 0;
   ai.resetShot();
-  $('aiTargetHint').textContent = '';
+  if ($('hudSubMeta')) $('hudSubMeta').textContent = '';
 }
 
 function releaseBall(vx, vy) {
@@ -177,9 +191,12 @@ function releaseBall(vx, vy) {
   me.hasBall = false;
   const bp = me.pose.ball || ballPos(me.pose);
   const b = newBall(AX + bp[0], bp[1], vx, vy, -6);
-  b.shot = round.shots.length;
+  b.roundId = round.id;
+  b.shot = round.attempts++;
   b.rel = lastRelease;
-  round.shots.push({ made: null, swish: false });
+  if (!isEndlessMode()) {
+    round.shots.push({ made: null, swish: false });
+  }
   balls.push(b);
   life.shots++;
   SND.release();
@@ -193,7 +210,9 @@ function grab() {
   SND.grab();
   me.ballRot = it.rot;
   me.hasBall = true;
-  if (rack.reserve > 0) {
+  if (isEndlessMode()) {
+    rack.items.unshift({ rot: Math.random() * 6.28, s: -1.2, a: 0 });
+  } else if (rack.reserve > 0) {
     rack.reserve--;
     rack.items.unshift({ rot: Math.random() * 6.28, s: -1.2, a: 0 });
   }
@@ -227,25 +246,27 @@ function burst(n, hot) {
 }
 
 function resolveShot(b, made) {
-  if (b.resolved || b.shot === undefined || !round) return;
+  if (b.resolved || b.shot === undefined || !round || b.roundId !== round.id) return;
   b.resolved = true;
   const rec = round.shots[b.shot];
-  if (!rec) return;
-  rec.made = made;
+  if (rec) rec.made = made;
   if (b.rel) b.rel.made = made;
 
   ai.onShotResolved(made);
 
   if (made) {
     life.makes++;
+    round.makes++;
     round.streak++;
     round.bestStreak = Math.max(round.bestStreak, round.streak);
     const swish = !b.touched;
-    rec.swish = swish;
+    if (rec) rec.swish = swish;
     if (swish) round.swishes++;
     const mult = round.streak >= 6 ? 3 : round.streak >= 3 ? 2 : 1;
     const pts = (swish ? 3 : 2) * mult;
     round.score += pts;
+    life.best = Math.max(life.best, round.score);
+    life.bestStreak = Math.max(life.bestStreak, round.bestStreak);
 
     const subs = [];
     if (swish) subs.push('空心 SWISH');
@@ -277,6 +298,7 @@ function resolveShot(b, made) {
       if (Math.random() < 0.75) danmaku.pushViewer(pickRandom(currentPersona.danmaku.made), false);
     }
   } else {
+    round.misses++;
     round.streak = 0;
     popup('打铁', '', false, true);
     pip.setAction('miss', '😅 差一点点', 1100);
@@ -301,7 +323,10 @@ function shoot() {
     { d: 0.32 },
     {
       fn: () => {
-        if (!rack.items.length) {
+        if (isEndlessMode() && !rack.items.length) {
+          rack.items = [0, 1, 2, 3, 4].map((i) => ({ rot: Math.random() * 6.28, s: i, a: 1 }));
+        }
+        if (!isEndlessMode() && !rack.items.length) {
           me.push(
             { path: [P.drop, P.stand], d: 0.4, ez: 'soft' },
             { fn: () => { state = 'done'; doneAt = clock; } },
@@ -335,22 +360,25 @@ function startCharge() {
   me.chargeFrom = me.pose;
 }
 
-function startGame() {
+function startGame(keepBalls = false) {
   ensureAudio();
-  newRound();
+  newRound(keepBalls);
   mode = 'play';
   $('overlay').classList.remove('on');
+  $('startCard').classList.remove('show');
+  $('endCard').classList.remove('show');
   $('hud').classList.remove('hidden');
-  const isManual = !ai.enabled || !currentPersona.isAI;
+  const isManual = !isEndlessMode();
   $('hint').classList.toggle('hidden', !isManual || life.seenHint);
   $('againBtnText').textContent = '再来一轮';
   pip.flashKey('R', 150);
-  pip.setAction('idle', '新的一轮开始');
+  pip.setAction('idle', isEndlessMode() ? '无限投篮中' : '新的一轮开始');
   pip.say(pickRandom(currentPersona.lines.intro));
   updateHud();
 }
 
 function endGame() {
+  if (isEndlessMode()) return;
   mode = 'over';
   life.games++;
   const res = {
@@ -413,24 +441,36 @@ function lifetimeLine() {
 
 function updateHud() {
   if (!round) return;
+  const endless = isEndlessMode();
+  $('hud').classList.toggle('endless', endless);
   $('score').textContent = round.score;
+  $('hudSwish').textContent = round.swishes;
+  $('hudMiss').textContent = round.misses;
   $('best').textContent = Math.max(life.best, round.score);
   $('hudPersonaName').textContent = currentPersona.name;
-  $('hudModeTag').textContent = ai.enabled && currentPersona.isAI ? `${currentPersona.title} · AI托管` : '手动操控中';
+  $('hudModeTag').textContent = endless ? `${currentPersona.title} · 无限投篮` : '手动操控中';
 
-  const n = round.shots.length;
-  let html = '';
-  for (let i = 0; i < ROUND; i++) {
-    const s = round.shots[i];
-    let cls = '';
-    if (s && s.made === true) cls = s.swish ? 'swish' : 'made';
-    else if (s && s.made === false) cls = 'miss';
-    else if (s) cls = 'fly';
-    else if (i === n && (me.hasBall || rack.items.length)) cls = 'next';
-    html += `<div class="dot ${cls}"></div>`;
+  if (endless) {
+    const resolved = round.makes + round.misses;
+    const acc = resolved > 0 ? Math.round((round.makes / resolved) * 100) : 0;
+    $('ballLabel').textContent = '∞ 无限篮球';
+    $('hudSubMeta').textContent = resolved > 0 ? `已投 ${resolved} 球 · 命中率 ${acc}%` : '无限连投中';
+  } else {
+    const n = round.shots.length;
+    let html = '';
+    for (let i = 0; i < ROUND; i++) {
+      const s = round.shots[i];
+      let cls = '';
+      if (s && s.made === true) cls = s.swish ? 'swish' : 'made';
+      else if (s && s.made === false) cls = 'miss';
+      else if (s) cls = 'fly';
+      else if (i === n && (me.hasBall || rack.items.length)) cls = 'next';
+      html += `<div class="dot ${cls}"></div>`;
+    }
+    $('tracker').innerHTML = html;
+    $('ballLabel').textContent = n < ROUND ? `第 ${n + 1} / ${ROUND} 球` : '最后一球';
+    $('hudSubMeta').textContent = '';
   }
-  $('tracker').innerHTML = html;
-  $('ballLabel').textContent = n < ROUND ? `第 ${n + 1} / ${ROUND} 球` : '最后一球';
 
   const st = $('streak');
   const s = round.streak;
@@ -443,13 +483,13 @@ function updateHud() {
   }
 }
 
-// Input pipeline (shared by Human and AI so keyboard animation & physics are 100% unified)
+// Input pipeline (shared by Human and Auto so keyboard animation & physics are 100% unified)
 function down(fromAI = false) {
   ensureAudio();
-  if (!fromAI && ai.enabled && currentPersona.isAI && mode === 'play') {
+  if (!fromAI && isEndlessMode() && mode === 'play') {
     // Allow seamless manual override if user presses Space or clicks canvas
-    setAutoPlay(false);
-    toast('已切换为手动接管！按顶部按钮可恢复 AI 自动投篮');
+    setAutoPlay(false, false);
+    toast('已关闭 Auto 模式，切为手动投篮（点顶部 Auto 按钮可恢复无限投篮）');
   }
   pressed = true;
   if (mode !== 'play') return;
@@ -461,7 +501,7 @@ function down(fromAI = false) {
 }
 
 function up(fromAI = false) {
-  if (!fromAI && ai.enabled && currentPersona.isAI) return;
+  if (!fromAI && isEndlessMode()) return;
   pressed = false;
   holdBlock = false;
   if (state === 'charge') {
@@ -481,6 +521,7 @@ function selectPersona(id, notify = true) {
   if (!PERSONAS[id]) return;
   currentPersonaId = id;
   currentPersona = PERSONAS[id];
+  if (currentPersona.isAI) lastAutoPersonaId = id;
   $('personaSelect').value = id;
 
   // Update start screen cards
@@ -493,7 +534,7 @@ function selectPersona(id, notify = true) {
 
   if (currentPersona.isAI) {
     setAutoPlay(true, false);
-    $('playBtnText').textContent = `开始 ${currentPersona.name} AI 直播投篮`;
+    $('playBtnText').textContent = `开始 ${currentPersona.name} 直播投篮`;
   } else {
     setAutoPlay(false, false);
     $('playBtnText').textContent = '开始手动投篮';
@@ -507,15 +548,33 @@ function selectPersona(id, notify = true) {
 }
 
 function setAutoPlay(flag, showToast = false) {
+  const wasEndless = isEndlessMode();
   ai.setEnabled(flag && currentPersona.isAI);
-  const active = ai.enabled;
+  const active = isEndlessMode();
   $('btnAutoPlay').classList.toggle('active', active);
-  $('autoPlayText').textContent = active ? 'AI托管中' : '手动模式';
+  $('autoPlayText').textContent = active ? 'Auto 开' : 'Auto 关';
+  $('btnAutoLoop').classList.toggle('hidden', true);
+
+  if (active) {
+    $('overlay').classList.remove('on');
+    $('startCard').classList.remove('show');
+    $('endCard').classList.remove('show');
+    $('hud').classList.remove('hidden');
+    if (mode !== 'play') {
+      startGame(false);
+    } else if (!wasEndless) {
+      newRound(true);
+      pip.setAction('idle', '无限投篮中');
+    }
+  } else if (mode === 'play' && wasEndless) {
+    newRound(true);
+    pip.setAction('idle', '手动投篮');
+  }
+
   $('hint').classList.toggle('hidden', mode !== 'play' || active || life.seenHint);
-  if (!active) $('aiTargetHint').textContent = '';
   updateHud();
   if (showToast) {
-    toast(active ? `${currentPersona.name} 已接管键盘自动投篮` : '已切回手动模式：长按空格或屏幕投篮');
+    toast(active ? '已开启 Auto 无限投篮模式' : '已关闭 Auto 模式，切为手动十球投篮');
   }
 }
 
@@ -600,10 +659,10 @@ $('shareBtn').addEventListener('click', () => share(lastResult));
 $('personaSelect').addEventListener('change', (e) => selectPersona(e.target.value, true));
 $('btnAutoPlay').addEventListener('click', () => {
   if (!currentPersona.isAI) {
-    selectPersona('campus_girl', true);
+    selectPersona(lastAutoPersonaId || 'campus_girl', true);
     return;
   }
-  setAutoPlay(!ai.enabled, true);
+  setAutoPlay(!isEndlessMode(), true);
 });
 $('btnAutoLoop').addEventListener('click', (e) => {
   const next = !ai.autoLoop;
@@ -856,7 +915,7 @@ function update(dt) {
     if (b.t > b.life) bits.splice(i, 1);
   }
 
-  if (mode === 'play' && state === 'done' && round.shots.every((s) => s.made !== null) && clock - doneAt > 0.9) {
+  if (!isEndlessMode() && mode === 'play' && state === 'done' && round.shots.every((s) => s.made !== null) && clock - doneAt > 0.9) {
     endGame();
   }
 }
@@ -977,11 +1036,23 @@ async function share(res) {
   }
 }
 
-// Init
+// Unlock Web Audio on first user interaction when Auto mode starts immediately
+const unlockAudioOnce = () => {
+  ensureAudio();
+  window.removeEventListener('pointerdown', unlockAudioOnce);
+  window.removeEventListener('keydown', unlockAudioOnce);
+};
+window.addEventListener('pointerdown', unlockAudioOnce, { passive: true });
+window.addEventListener('keydown', unlockAudioOnce, { passive: true });
+
+// Init: Auto mode is ON by default -> enter endless shooting directly with no popup
 buildStartPersonaGrid();
 selectPersona('campus_girl', false);
 $('startFoot').textContent = lifetimeLine();
 $('best').textContent = life.best;
+if (isEndlessMode() && mode !== 'play') {
+  startGame(false);
+}
 
 let last = performance.now();
 function frame(now) {

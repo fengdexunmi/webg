@@ -12,6 +12,7 @@ export class StreamerPip {
     this.subtitleEl = document.getElementById('camSubtitle');
     this.audioBars = document.getElementById('audioBars');
 
+    this.camVideo = document.getElementById('camVideo');
     this.imgs = {
       idle: document.getElementById('camImgIdle'),
       press: document.getElementById('camImgPress'),
@@ -34,14 +35,18 @@ export class StreamerPip {
       R: document.getElementById('mkR'),
     };
 
+    this.muteBtn = document.getElementById('pipMuteBtn');
     this.sizeBtn = document.getElementById('pipSizeBtn');
     this.closeBtn = document.getElementById('pipCloseBtn');
     this.uploadBtn = document.getElementById('pipUploadBtn');
     this.photoInput = document.getElementById('pipPhotoInput');
 
     this.persona = null;
-    this.customPhotoUrl = null;
+    this.customMediaUrl = null;
     this.loadedPhotos = { idle: false, press: false, cheer: false, miss: false };
+    this.hasVideo = false;
+    this.videoMap = null;
+    this.activeVideoSrc = '';
     this.camState = 'idle'; // idle | press | cheer | miss
     this.stateResetTimer = null;
     this.talkTimer = null;
@@ -108,16 +113,45 @@ export class StreamerPip {
       if (this.onVisibilityChange) this.onVisibilityChange(false);
     });
 
-    // Custom photo upload (click or drag-and-drop onto PiP) so user can plug in any real photo
+    // Video mute/unmute toggle
+    if (this.muteBtn && this.camVideo) {
+      this.muteBtn.addEventListener('click', () => {
+        this.camVideo.muted = !this.camVideo.muted;
+        this.muteBtn.textContent = this.camVideo.muted ? '🔇' : '🔊';
+        if (!this.camVideo.muted && this.camVideo.paused) {
+          this.camVideo.play().catch(() => {});
+        }
+      });
+    }
+
+    // Resume muted autoplay on first user gesture if browser deferred it
+    const ensureVideoPlaying = () => {
+      if (this.hasVideo && this.camVideo && this.camVideo.paused && this.isVisible()) {
+        this.camVideo.play().catch(() => {});
+      }
+    };
+    window.addEventListener('pointerdown', ensureVideoPlaying, { passive: true });
+    window.addEventListener('keydown', ensureVideoPlaying, { passive: true });
+
+    // Custom video/photo upload (click or drag-and-drop onto PiP)
     const applyFile = (file) => {
-      if (!file || !file.type.startsWith('image/')) return;
-      if (this.customPhotoUrl) URL.revokeObjectURL(this.customPhotoUrl);
-      this.customPhotoUrl = URL.createObjectURL(file);
+      if (!file) return;
+      if (file.type.startsWith('video/')) {
+        if (this.customMediaUrl) URL.revokeObjectURL(this.customMediaUrl);
+        this.customMediaUrl = URL.createObjectURL(file);
+        this._loadVideoSource(this.customMediaUrl);
+        this.say('换上新真人视频啦！开播继续投篮～');
+        return;
+      }
+      if (!file.type.startsWith('image/')) return;
+      if (this.customMediaUrl) URL.revokeObjectURL(this.customMediaUrl);
+      this.customMediaUrl = URL.createObjectURL(file);
+      this._clearVideo();
       this._loadPhotoSet({
-        idle: this.customPhotoUrl,
-        press: this.customPhotoUrl,
-        cheer: this.customPhotoUrl,
-        miss: this.customPhotoUrl,
+        idle: this.customMediaUrl,
+        press: this.customMediaUrl,
+        cheer: this.customMediaUrl,
+        miss: this.customMediaUrl,
       });
       this.say('换上新主播照片啦！开播继续投篮～');
     };
@@ -132,6 +166,10 @@ export class StreamerPip {
 
   setVisible(visible) {
     this.el.classList.toggle('hidden', !visible);
+    if (this.camVideo && this.hasVideo) {
+      if (visible) this.camVideo.play().catch(() => {});
+      else this.camVideo.pause();
+    }
   }
 
   isVisible() {
@@ -143,9 +181,104 @@ export class StreamerPip {
     this.nameEl.textContent = persona.roomTitle;
     this.viewers = persona.baseViewers + Math.floor(Math.random() * 240);
     this._renderViewers();
-    this.customPhotoUrl = null;
-    this._loadPhotoSet(persona.photos || {});
+    if (this.customMediaUrl) {
+      URL.revokeObjectURL(this.customMediaUrl);
+      this.customMediaUrl = null;
+    }
+    if (persona.videos || persona.video) {
+      this._loadPhotoSet({});
+      this._loadVideoSource(persona.videos || persona.video);
+    } else {
+      this._clearVideo();
+      this._loadPhotoSet(persona.photos || {});
+    }
     this.setAction('idle', '准备瞄准');
+  }
+
+  _clearVideo() {
+    this.hasVideo = false;
+    this.videoMap = null;
+    this.activeVideoSrc = '';
+    this.camStage.classList.remove('has-video');
+    if (this.muteBtn) {
+      this.muteBtn.classList.add('hidden');
+      this.muteBtn.textContent = '🔇';
+    }
+    if (this.camVideo) {
+      this.camVideo.pause();
+      this.camVideo.muted = true;
+      this.camVideo.removeAttribute('src');
+      this.camVideo.load();
+    }
+  }
+
+  _loadVideoSource(source) {
+    if (!this.camVideo || !source) {
+      this._clearVideo();
+      return;
+    }
+    if (typeof source === 'string') {
+      this.videoMap = { idle: source, press: source, cheer: source, miss: source };
+    } else {
+      this.videoMap = source;
+    }
+    const targetSrc = this.videoMap[this.camState] || this.videoMap.idle || Object.values(this.videoMap)[0];
+    if (!targetSrc) {
+      this._clearVideo();
+      return;
+    }
+    this._setVideoSrc(targetSrc);
+  }
+
+  _setVideoSrc(src) {
+    if (!this.camVideo || !src || this.activeVideoSrc === src) return;
+    this.activeVideoSrc = src;
+    this.hasVideo = false;
+    this.camStage.classList.remove('has-video');
+
+    const onReady = () => {
+      if (this.activeVideoSrc !== src) return;
+      this.hasVideo = true;
+      this.camStage.classList.add('has-video');
+      if (this.muteBtn) {
+        this.muteBtn.classList.remove('hidden');
+        this.muteBtn.textContent = this.camVideo.muted ? '🔇' : '🔊';
+      }
+      if (this.isVisible()) {
+        this.camVideo.play().catch(() => {});
+      }
+    };
+    const onError = () => {
+      if (this.activeVideoSrc !== src) return;
+      this._clearVideo();
+      if (this.persona?.photos) {
+        this._loadPhotoSet(this.persona.photos);
+      }
+    };
+
+    this.camVideo.onloadeddata = onReady;
+    this.camVideo.oncanplay = onReady;
+    this.camVideo.onerror = onError;
+    this.camVideo.muted = true;
+    this.camVideo.loop = true;
+    this.camVideo.playsInline = true;
+    this.camVideo.src = src;
+    this.camVideo.load();
+  }
+
+  _syncVideoState(state) {
+    if (!this.camVideo || !this.videoMap) return;
+    const nextSrc = this.videoMap[state] || this.videoMap.idle;
+    if (nextSrc && nextSrc !== this.activeVideoSrc) {
+      this._setVideoSrc(nextSrc);
+    }
+    if (this.hasVideo) {
+      const rateByState = { idle: 1.0, press: 0.86, cheer: 1.16, miss: 0.94 };
+      this.camVideo.playbackRate = rateByState[state] ?? 1.0;
+      if (this.camVideo.paused && this.isVisible()) {
+        this.camVideo.play().catch(() => {});
+      }
+    }
   }
 
   _loadPhotoSet(photos) {
@@ -187,6 +320,7 @@ export class StreamerPip {
     this.camState = state;
     this.camStage.dataset.state = state;
     this._syncActiveImg();
+    this._syncVideoState(state);
 
     this.actionChip.textContent = label;
     this.actionChip.className = 'cam-status-chip';
@@ -270,10 +404,14 @@ export class StreamerPip {
     setTimeout(() => el.classList.remove('pressed'), ms);
   }
 
-  // Live high-craft animated desk-cam fallback renderer (active whenever custom/AI photo files are absent)
+  // Live high-craft animated desk-cam fallback renderer (active whenever custom/AI video or photo files are absent)
   _startFallbackLoop() {
     const renderCam = (now) => {
-      if (!this.camStage.classList.contains('has-photo') && this.isVisible()) {
+      if (
+        !this.camStage.classList.contains('has-video') &&
+        !this.camStage.classList.contains('has-photo') &&
+        this.isVisible()
+      ) {
         this._drawFallbackWebcam(now * 0.001);
       }
       requestAnimationFrame(renderCam);

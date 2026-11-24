@@ -136,12 +136,30 @@ button {
   100% { transform: scale(1); }
 }
 
-#best {
-  font-size: 22px;
+#best,
+#hudSwish,
+#hudMiss {
+  font-size: 24px;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
+}
+
+#hudSwish {
+  color: var(--amber);
+}
+
+#hud.endless .stat-manual-only {
+  display: none;
+}
+
+#hud:not(.endless) .stat-endless-only {
+  display: none;
+}
+
+#hud.endless #tracker {
+  display: none;
 }
 
 .stat-persona {
@@ -228,9 +246,10 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
-#aiTargetHint {
-  color: var(--amber);
+#hudSubMeta {
+  color: var(--muted);
   font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 #streak {
@@ -331,6 +350,10 @@ button {
   background: var(--butter-soft);
   color: var(--umber);
   box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.18);
+}
+
+.ctrl-btn.hidden {
+  display: none;
 }
 
 .dot-ind {
@@ -462,6 +485,10 @@ button {
   color: #ffffff;
 }
 
+.pip-icon-btn.hidden {
+  display: none;
+}
+
 .pip-viewport {
   position: relative;
   width: 100%;
@@ -484,9 +511,19 @@ button {
   animation: camBreathe 3.8s ease-in-out infinite;
 }
 
+/* Live AI video already has natural breathing; avoid artificial CSS bobbing */
+.cam-stage.has-video[data-state="idle"] {
+  animation: none;
+}
+
 .cam-stage[data-state="press"] {
   transform: scale(1.045) translateY(3px);
   filter: contrast(1.03) saturate(1.04);
+}
+
+.cam-stage.has-video[data-state="press"] {
+  transform: scale(1.035) translateY(2px);
+  filter: contrast(1.03) saturate(1.05);
 }
 
 .cam-stage[data-state="cheer"] {
@@ -517,6 +554,22 @@ button {
   100% { transform: translateX(0) rotate(0deg); }
 }
 
+.cam-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.cam-stage.has-video .cam-video {
+  opacity: 1;
+}
+
 .cam-frame {
   position: absolute;
   inset: 0;
@@ -541,7 +594,9 @@ button {
   display: block;
 }
 
-.cam-stage.has-photo .cam-fallback {
+.cam-stage.has-photo .cam-fallback,
+.cam-stage.has-video .cam-fallback,
+.cam-stage.has-video .cam-frame {
   display: none;
 }
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>十球投篮 · AI 直播间版 (Goofy Hoops Studio)</title>
+<title>十球投篮 · 直播间版 (Goofy Hoops Studio)</title>
 <style>
   :root {
     --paper: #ffffff;
@@ -108,7 +108,11 @@
     35% { transform: scale(1.14); }
     100% { transform: scale(1); }
   }
-  #best { font-size: 21px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; color: var(--muted); }
+  #best, #hudSwish, #hudMiss { font-size: 22px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; color: var(--muted); }
+  #hudSwish { color: var(--amber); }
+  #hud.endless .stat-manual-only { display: none; }
+  #hud:not(.endless) .stat-endless-only { display: none; }
+  #hud.endless #tracker { display: none; }
   .stat-persona { padding-left: 14px; border-left: 1px solid var(--line); }
   #hudPersonaName { font-size: 15px; font-weight: 700; line-height: 1.1; color: var(--ink); }
   .ballrow { display: grid; gap: 7px; padding-top: 10px; border-top: 1px solid var(--line); }
@@ -131,7 +135,7 @@
   }
   @keyframes pulse { 50% { transform: scale(1.22); } }
   #ballLabel { font-variant-numeric: tabular-nums; }
-  #aiTargetHint { color: var(--amber); font-size: 11.5px; }
+  #hudSubMeta { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
   #streak {
     font-size: 13px; font-weight: 700; color: var(--amber);
     background: var(--butter-soft); border-radius: 9px; padding: 5px 11px;
@@ -182,6 +186,7 @@
     color: var(--umber);
     box-shadow: inset 0 0 0 1px rgba(180, 83, 9, 0.18);
   }
+  .ctrl-btn.hidden { display: none; }
   .dot-ind { width: 7px; height: 7px; border-radius: 50%; background: var(--soft); }
   .ctrl-btn.active .dot-ind { background: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.18); }
 
@@ -225,6 +230,7 @@
     font-size: 12px; color: #cbd5e1; transition: background 0.15s, color 0.15s;
   }
   .pip-icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #ffffff; }
+  .pip-icon-btn.hidden { display: none; }
 
   .pip-viewport { position: relative; width: 100%; aspect-ratio: 16 / 10; background: #0f1117; overflow: hidden; }
   .cam-stage {
@@ -233,7 +239,9 @@
     transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), filter 0.2s;
   }
   .cam-stage[data-state="idle"] { animation: camBreathe 3.8s ease-in-out infinite; }
+  .cam-stage.has-video[data-state="idle"] { animation: none; }
   .cam-stage[data-state="press"] { transform: scale(1.045) translateY(3px); filter: contrast(1.03) saturate(1.04); }
+  .cam-stage.has-video[data-state="press"] { transform: scale(1.035) translateY(2px); filter: contrast(1.03) saturate(1.05); }
   .cam-stage[data-state="cheer"] { animation: camCheer 0.55s ease-out; filter: brightness(1.06) saturate(1.08); }
   .cam-stage[data-state="miss"] { animation: camOops 0.45s ease-out; }
   @keyframes camBreathe {
@@ -252,6 +260,12 @@
     65% { transform: translateX(3px) rotate(0.6deg); }
     100% { transform: translateX(0) rotate(0deg); }
   }
+  .cam-video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: center 22%;
+    opacity: 0; transition: opacity 0.25s ease; pointer-events: none;
+  }
+  .cam-stage.has-video .cam-video { opacity: 1; }
   .cam-frame {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; object-position: center 22%;
@@ -259,7 +273,9 @@
   }
   .cam-frame.active { opacity: 1; }
   .cam-fallback { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  .cam-stage.has-photo .cam-fallback { display: none; }
+  .cam-stage.has-photo .cam-fallback,
+  .cam-stage.has-video .cam-fallback,
+  .cam-stage.has-video .cam-frame { display: none; }
   .cam-vignette {
     position: absolute; inset: 0; pointer-events: none;
     background: linear-gradient(180deg, rgba(15, 23, 42, 0.36) 0%, transparent 28%, transparent 62%, rgba(15, 23, 42, 0.78) 100%);
@@ -476,21 +492,23 @@
 <canvas id="gameCanvas" aria-label="十球投篮游戏画布"></canvas>
 <div id="danmakuLayer" aria-hidden="true"></div>
 
-<header id="hud" class="hidden">
+<header id="hud" class="endless">
   <div class="board panel">
     <div class="tally">
       <div class="stat"><div id="score">0</div><div class="label">得分</div></div>
-      <div class="stat"><div id="best">0</div><div class="label">最高分</div></div>
+      <div class="stat stat-endless-only"><div id="hudSwish">0</div><div class="label">空心球</div></div>
+      <div class="stat stat-endless-only"><div id="hudMiss">0</div><div class="label">打铁数</div></div>
+      <div class="stat stat-manual-only"><div id="best">0</div><div class="label">最高分</div></div>
       <div class="stat stat-persona">
         <div id="hudPersonaName">林小夏</div>
-        <div class="label" id="hudModeTag">AI 自动投篮</div>
+        <div class="label" id="hudModeTag">Auto 无限投篮</div>
       </div>
     </div>
     <div class="ballrow">
       <div id="tracker"></div>
       <div class="ballrow-meta">
-        <span class="label" id="ballLabel">第 1 / 10 球</span>
-        <span class="label" id="aiTargetHint"></span>
+        <span class="label" id="ballLabel">∞ 无限篮球</span>
+        <span class="label" id="hudSubMeta"></span>
       </div>
     </div>
   </div>
@@ -499,7 +517,7 @@
 
 <nav id="topControls" aria-label="直播与角色控制">
   <div class="control-pill panel">
-    <label class="ctrl-group" title="切换场上角色 / AI人格">
+    <label class="ctrl-group" title="切换场上角色">
       <span class="ctrl-label">角色</span>
       <select id="personaSelect" aria-label="选择角色">
         <option value="campus_girl">🏀 校园运动美女 · 林小夏</option>
@@ -510,8 +528,8 @@
       </select>
     </label>
     <div class="ctrl-divider"></div>
-    <button class="ctrl-btn active" id="btnAutoPlay"><span class="dot-ind"></span><span id="autoPlayText">AI托管中</span></button>
-    <button class="ctrl-btn active" id="btnAutoLoop">连播</button>
+    <button class="ctrl-btn active" id="btnAutoPlay" title="开启/关闭 Auto 无限投篮模式"><span class="dot-ind"></span><span id="autoPlayText">Auto 开</span></button>
+    <button class="ctrl-btn active hidden" id="btnAutoLoop">连播</button>
     <button class="ctrl-btn active" id="btnPipToggle">直播窗</button>
     <button class="ctrl-btn" id="btnDanmakuToggle">弹幕</button>
     <button class="ctrl-btn" id="btnTtsToggle">语音</button>
@@ -526,7 +544,7 @@
   <kbd>Space</kbd>
 </div>
 
-<aside id="streamerPip" class="pip-window" aria-label="AI主播直播小窗">
+<aside id="streamerPip" class="pip-window" aria-label="主播直播小窗">
   <div class="pip-header" id="pipDragHandle">
     <div class="pip-live-badge"><span class="live-dot"></span><span>LIVE</span></div>
     <div class="pip-title-wrap">
@@ -534,15 +552,17 @@
       <span class="pip-viewers" id="pipViewers">👁 2,680</span>
     </div>
     <div class="pip-actions">
-      <button class="pip-icon-btn" id="pipUploadBtn" title="上传或拖拽真人主播照片">📷</button>
+      <button class="pip-icon-btn hidden" id="pipMuteBtn" title="开启/静音主播视频原声">🔇</button>
+      <button class="pip-icon-btn" id="pipUploadBtn" title="上传或拖拽真人视频/照片">🎬</button>
       <button class="pip-icon-btn" id="pipSizeBtn" title="切换小窗大小">⤢</button>
       <button class="pip-icon-btn" id="pipCloseBtn" title="收起小窗">✕</button>
     </div>
-    <input type="file" id="pipPhotoInput" accept="image/*" hidden>
+    <input type="file" id="pipPhotoInput" accept="video/*,image/*" hidden>
   </div>
 
   <div class="pip-viewport">
     <div class="cam-stage" id="camStage" data-state="idle">
+      <video id="camVideo" class="cam-video" autoplay loop muted playsinline preload="auto" aria-label="真人主播实时视频"></video>
       <img id="camImgCustom" class="cam-frame" alt="自定义主播照片">
       <canvas id="camFallbackCanvas" class="cam-fallback"></canvas>
       <div class="cam-vignette"></div>
@@ -589,8 +609,8 @@
 
 <button id="exitStreamBtn" class="panel">退出纯净模式</button>
 
-<div id="overlay" class="on">
-  <div class="card show" id="startCard">
+<div id="overlay">
+  <div class="card" id="startCard">
     <div class="card-head-row">
       <div class="logo">
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round">
@@ -602,11 +622,11 @@
       <span class="chip">Goofy Hoops 直播复刻</span>
     </div>
     <h1 class="title">十球投篮</h1>
-    <div class="keys"><kbd>长按</kbd> 蓄力，<kbd>松手</kbd> 出手 · 支持 <kbd>AI 自动打球</kbd></div>
+    <div class="keys"><kbd>长按</kbd> 蓄力，<kbd>松手</kbd> 出手 · 支持 <kbd>Auto 无限投篮</kbd></div>
     <p class="tag">空心入网得 3 分，普通进球 2 分。连中 3 球翻倍，连中 6 球三倍积分！</p>
     <div class="persona-grid" id="startPersonaGrid"></div>
     <div class="actions">
-      <button class="btn primary" id="playBtn"><span id="playBtnText">开始 林小夏 AI 直播投篮</span><kbd>Space</kbd></button>
+      <button class="btn primary" id="playBtn"><span id="playBtnText">开始投篮</span><kbd>Space</kbd></button>
     </div>
     <div class="foot" id="startFoot"></div>
   </div>
@@ -650,6 +670,7 @@
       id: 'campus_girl', name: '林小夏', title: '校园运动美女', roomTitle: '林小夏 · 校园运动直播间',
       emoji: '🏀', desc: '校队三分女神 · 稳健俏皮', isAI: true, baseViewers: 2680,
       accessory: 'ponytail', accentColor: '#f59e0b',
+      video: 'assets/campus_girl_live.mp4',
       outfitPalette: { hair: '#2b1e1a', skin: '#fde2ce', jacket: '#ffffff', stripe: '#f59e0b', ribbon: '#fcd34d', roomWall: '#f7efe3', desk: '#e6c9a2', keycap: '#fffaf0' },
       ai: { targetCharge: SWEET_CHARGE, bias: 0, jitter: 0.026, streakTighten: 0.0025, nervesAtSix: 0.012, thinkDelay: [0.36, 0.72], preferDownswing: 0.14, missRecovery: 0.7 },
       tts: { rate: 1.12, pitch: 1.25 },
@@ -754,6 +775,7 @@
       id: 'human', name: '你自己', title: '手动亲自上阵', roomTitle: '玩家实况 · 手动操作模式',
       emoji: '🎮', desc: '按空格键或鼠标长按蓄力投篮', isAI: false, baseViewers: 1200,
       accessory: 'none', accentColor: '#1f2329',
+      video: 'assets/campus_girl_live.mp4',
       outfitPalette: { hair: '#2b1e1a', skin: '#fde2ce', jacket: '#ffffff', stripe: '#f59e0b', ribbon: '#fcd34d', roomWall: '#f7efe3', desk: '#e6c9a2', keycap: '#fffaf0' },
       ai: null, tts: { rate: 1.08, pitch: 1.18 },
       lines: {
@@ -1213,12 +1235,13 @@
       this.nameEl = $('pipName'); this.viewersEl = $('pipViewers');
       this.camStage = $('camStage'); this.actionChip = $('camActionChip');
       this.subtitleEl = $('camSubtitle'); this.audioBars = $('audioBars');
+      this.camVideo = $('camVideo'); this.muteBtn = $('pipMuteBtn');
       this.customImg = $('camImgCustom');
       this.fallbackCanvas = $('camFallbackCanvas'); this.fctx = this.fallbackCanvas.getContext('2d');
       this.mkSpace = $('mkSpace'); this.kbSpaceFill = $('kbSpaceFill'); this.kbSpaceText = $('kbSpaceText');
       this.kbPowerVal = $('kbPowerVal'); this.kbHoldVal = $('kbHoldVal');
       this.miniKeys = { W: $('mkW'), A: $('mkA'), S: $('mkS'), D: $('mkD'), R: $('mkR') };
-      this.persona = null; this.customPhotoUrl = null; this.camState = 'idle';
+      this.persona = null; this.customMediaUrl = null; this.hasVideo = false; this.activeVideoSrc = ''; this.camState = 'idle';
       this.stateResetTimer = null; this.talkTimer = null; this.sizeIdx = 1;
       this.viewers = 2680; this.spaceDown = false; this.holdStartMs = 0;
       this._initEvents(); this._startCamLoop();
@@ -1241,6 +1264,19 @@
       const end = () => { dragging = false; };
       this.dragHandle.addEventListener('pointerup', end); this.dragHandle.addEventListener('pointercancel', end);
 
+      if (this.muteBtn && this.camVideo) {
+        this.muteBtn.addEventListener('click', () => {
+          this.camVideo.muted = !this.camVideo.muted;
+          this.muteBtn.textContent = this.camVideo.muted ? '🔇' : '🔊';
+          if (!this.camVideo.muted && this.camVideo.paused) this.camVideo.play().catch(() => {});
+        });
+      }
+      const ensurePlaying = () => {
+        if (this.hasVideo && this.camVideo && this.camVideo.paused && this.isVisible()) this.camVideo.play().catch(() => {});
+      };
+      window.addEventListener('pointerdown', ensurePlaying, { passive: true });
+      window.addEventListener('keydown', ensurePlaying, { passive: true });
+
       $('pipSizeBtn').addEventListener('click', () => {
         this.sizeIdx = (this.sizeIdx + 1) % 3;
         this.el.classList.remove('size-sm', 'size-lg');
@@ -1250,11 +1286,20 @@
       $('pipCloseBtn').addEventListener('click', () => { this.setVisible(false); $('btnPipToggle').classList.remove('active'); });
 
       const applyFile = (file) => {
-        if (!file || !file.type.startsWith('image/')) return;
-        if (this.customPhotoUrl) URL.revokeObjectURL(this.customPhotoUrl);
-        this.customPhotoUrl = URL.createObjectURL(file);
+        if (!file) return;
+        if (file.type.startsWith('video/')) {
+          if (this.customMediaUrl) URL.revokeObjectURL(this.customMediaUrl);
+          this.customMediaUrl = URL.createObjectURL(file);
+          this._setVideoSrc(this.customMediaUrl);
+          this.say('换上新真人视频啦！开播继续投篮～');
+          return;
+        }
+        if (!file.type.startsWith('image/')) return;
+        if (this.customMediaUrl) URL.revokeObjectURL(this.customMediaUrl);
+        this.customMediaUrl = URL.createObjectURL(file);
+        this._clearVideo();
         this.customImg.onload = () => { this.camStage.classList.add('has-photo'); this.customImg.classList.add('active'); };
-        this.customImg.src = this.customPhotoUrl;
+        this.customImg.src = this.customMediaUrl;
         this.say('换上新真人主播照片啦！开播继续投篮～');
       };
       $('pipUploadBtn').addEventListener('click', () => $('pipPhotoInput').click());
@@ -1262,17 +1307,53 @@
       this.el.addEventListener('dragover', (e) => e.preventDefault());
       this.el.addEventListener('drop', (e) => { e.preventDefault(); applyFile(e.dataTransfer?.files?.[0]); });
     }
-    setVisible(v) { this.el.classList.toggle('hidden', !v); }
+    setVisible(v) {
+      this.el.classList.toggle('hidden', !v);
+      if (this.camVideo && this.hasVideo) {
+        if (v) this.camVideo.play().catch(() => {});
+        else this.camVideo.pause();
+      }
+    }
     isVisible() { return !this.el.classList.contains('hidden'); }
+    _clearVideo() {
+      this.hasVideo = false; this.activeVideoSrc = '';
+      this.camStage.classList.remove('has-video');
+      if (this.muteBtn) { this.muteBtn.classList.add('hidden'); this.muteBtn.textContent = '🔇'; }
+      if (this.camVideo) { this.camVideo.pause(); this.camVideo.muted = true; this.camVideo.removeAttribute('src'); this.camVideo.load(); }
+    }
+    _setVideoSrc(src) {
+      if (!this.camVideo || !src || this.activeVideoSrc === src) return;
+      this.activeVideoSrc = src; this.hasVideo = false;
+      this.camStage.classList.remove('has-video');
+      const onReady = () => {
+        if (this.activeVideoSrc !== src) return;
+        this.hasVideo = true; this.camStage.classList.add('has-video');
+        if (this.muteBtn) { this.muteBtn.classList.remove('hidden'); this.muteBtn.textContent = this.camVideo.muted ? '🔇' : '🔊'; }
+        if (this.isVisible()) this.camVideo.play().catch(() => {});
+      };
+      this.camVideo.onloadeddata = onReady;
+      this.camVideo.oncanplay = onReady;
+      this.camVideo.onerror = () => { if (this.activeVideoSrc === src) this._clearVideo(); };
+      this.camVideo.muted = true; this.camVideo.loop = true; this.camVideo.playsInline = true;
+      this.camVideo.src = src; this.camVideo.load();
+    }
     setPersona(p) {
       this.persona = p; this.nameEl.textContent = p.roomTitle;
       this.viewers = p.baseViewers + Math.floor(Math.random() * 240);
       this.viewersEl.textContent = `👁 ${this.viewers.toLocaleString()}`;
+      if (this.customMediaUrl) { URL.revokeObjectURL(this.customMediaUrl); this.customMediaUrl = null; }
+      this.camStage.classList.remove('has-photo'); this.customImg.classList.remove('active');
+      if (p.video) this._setVideoSrc(p.video);
+      else this._clearVideo();
       this.setAction('idle', '准备瞄准');
     }
     setAction(state, label, autoResetMs = 0) {
       clearTimeout(this.stateResetTimer);
       this.camState = state; this.camStage.dataset.state = state;
+      if (this.hasVideo && this.camVideo) {
+        const rates = { idle: 1.0, press: 0.86, cheer: 1.16, miss: 0.94 };
+        this.camVideo.playbackRate = rates[state] ?? 1.0;
+      }
       this.actionChip.textContent = label; this.actionChip.className = 'cam-status-chip';
       if (state === 'press') this.actionChip.classList.add('holding');
       else if (state === 'cheer') this.actionChip.classList.add('cheer');
@@ -1311,7 +1392,7 @@
     }
     flashKey(l, ms = 160) { const el = this.miniKeys[l]; if (!el) return; el.classList.add('pressed'); setTimeout(() => el.classList.remove('pressed'), ms); }
     _startCamLoop() {
-      const tick = (now) => { if (!this.camStage.classList.contains('has-photo') && this.isVisible()) this._drawDeskCam(now * 0.001); requestAnimationFrame(tick); };
+      const tick = (now) => { if (!this.camStage.classList.contains('has-video') && !this.camStage.classList.contains('has-photo') && this.isVisible()) this._drawDeskCam(now * 0.001); requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
     }
     _drawDeskCam(t) {
@@ -1520,9 +1601,11 @@
     pressDown: (f) => down(f),
     pressUp: (f) => up(f),
     startNextRound: () => startGame(),
-    onChargeStart: (tc) => { $('aiTargetHint').textContent = `AI 瞄准 ${Math.round(tc * 100)}%`; if (Math.random() < 0.42) pip.say(pickRandom(currentPersona.lines.charge), false); },
+    onChargeStart: () => { if (Math.random() < 0.42) pip.say(pickRandom(currentPersona.lines.charge), false); },
     onRestartCountdown: (sec) => { $('againBtnText').textContent = `自动下一轮 (${Math.ceil(sec)}s)`; },
   });
+  let lastAutoPersonaId = 'campus_girl', roundSeq = 0;
+  const isEndlessMode = () => ai.enabled && currentPersona.isAI;
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 3);
@@ -1550,23 +1633,28 @@
   }
   const chargePeriod = () => 1.05 * Math.pow(0.92, Math.min(round ? round.streak : 0, 8));
 
-  function newRound() {
-    round = { shots: [], score: 0, streak: 0, bestStreak: 0, swishes: 0 };
-    balls = []; rack.items = [0, 1, 2, 3, 4].map((i) => ({ rot: Math.random() * 6.28, s: i, a: 1 })); rack.reserve = ROUND - 6;
+  function newRound(keepBalls = false) {
+    roundSeq++;
+    round = { id: roundSeq, endless: isEndlessMode(), shots: [], score: 0, streak: 0, bestStreak: 0, swishes: 0, misses: 0, makes: 0, attempts: 0 };
+    if (!keepBalls) balls = [];
+    rack.items = [0, 1, 2, 3, 4].map((i) => ({ rot: Math.random() * 6.28, s: i, a: 1 }));
+    rack.reserve = isEndlessMode() ? Infinity : ROUND - 6;
     me.clear(); me.hasBall = true; me.push({ pose: P.hold, d: 0.3, ez: 'soft' });
     state = 'ready'; doneAt = -1; lastRelease = null; prevRelease = null; popups = [];
-    ai.resetShot(); $('aiTargetHint').textContent = '';
+    ai.resetShot(); if ($('hudSubMeta')) $('hudSubMeta').textContent = '';
   }
   function releaseBall(vx, vy) {
     if (!me.hasBall) return;
     me.hasBall = false; const bp = me.pose.ball || ballPos(me.pose);
-    const b = newBall(AX + bp[0], bp[1], vx, vy, -6); b.shot = round.shots.length; b.rel = lastRelease;
-    round.shots.push({ made: null, swish: false }); balls.push(b); life.shots++; SND.release(); updateHud();
+    const b = newBall(AX + bp[0], bp[1], vx, vy, -6); b.roundId = round.id; b.shot = round.attempts++; b.rel = lastRelease;
+    if (!isEndlessMode()) round.shots.push({ made: null, swish: false });
+    balls.push(b); life.shots++; SND.release(); updateHud();
   }
   function grab() {
     if (!rack.items.length) return false;
     const it = rack.items.pop(); SND.grab(); me.ballRot = it.rot; me.hasBall = true;
-    if (rack.reserve > 0) { rack.reserve--; rack.items.unshift({ rot: Math.random() * 6.28, s: -1.2, a: 0 }); }
+    if (isEndlessMode()) { rack.items.unshift({ rot: Math.random() * 6.28, s: -1.2, a: 0 }); }
+    else if (rack.reserve > 0) { rack.reserve--; rack.items.unshift({ rot: Math.random() * 6.28, s: -1.2, a: 0 }); }
     return true;
   }
   function burst(n, hot) {
@@ -1577,14 +1665,14 @@
     }
   }
   function resolveShot(b, made) {
-    if (b.resolved || b.shot === undefined || !round) return;
-    b.resolved = true; const rec = round.shots[b.shot]; if (!rec) return;
-    rec.made = made; if (b.rel) b.rel.made = made; ai.onShotResolved(made);
+    if (b.resolved || b.shot === undefined || !round || b.roundId !== round.id) return;
+    b.resolved = true; const rec = round.shots[b.shot]; if (rec) rec.made = made;
+    if (b.rel) b.rel.made = made; ai.onShotResolved(made);
     if (made) {
-      life.makes++; round.streak++; round.bestStreak = Math.max(round.bestStreak, round.streak);
-      const swish = !b.touched; rec.swish = swish; if (swish) round.swishes++;
+      life.makes++; round.makes++; round.streak++; round.bestStreak = Math.max(round.bestStreak, round.streak);
+      const swish = !b.touched; if (rec) rec.swish = swish; if (swish) round.swishes++;
       const mult = round.streak >= 6 ? 3 : round.streak >= 3 ? 2 : 1, pts = (swish ? 3 : 2) * mult;
-      round.score += pts;
+      round.score += pts; life.best = Math.max(life.best, round.score);
       const subs = []; if (swish) subs.push('空心 SWISH'); if (mult > 1) subs.push('×' + mult);
       popups.push({ text: '+' + pts, sub: subs.join(' · '), hot: swish || mult > 1, quiet: false, t: 0 });
       burst(swish ? 18 : 9, swish || mult > 1);
@@ -1600,7 +1688,7 @@
         pip.bumpViewers(10); if (Math.random() < 0.75) danmaku.pushViewer(pickRandom(currentPersona.danmaku.made));
       }
     } else {
-      round.streak = 0; popups.push({ text: '打铁', sub: '', hot: false, quiet: true, t: 0 });
+      round.misses++; round.streak = 0; popups.push({ text: '打铁', sub: '', hot: false, quiet: true, t: 0 });
       pip.setAction('miss', '😅 差一点点', 1100); pip.say(pickRandom(currentPersona.lines.miss));
       danmaku.pushViewer(pickRandom(currentPersona.danmaku.miss));
     }
@@ -1612,24 +1700,27 @@
     me.clear();
     me.push({ path: [P.rise, P.set], d: 0.15, ez: 'in' }, { fn: () => releaseBall(vx, vy) }, { pose: P.follow, d: 0.09, ez: 'out' }, { d: 0.32 }, {
       fn: () => {
-        if (!rack.items.length) { me.push({ path: [P.drop, P.stand], d: 0.4, ez: 'soft' }, { fn: () => { state = 'done'; doneAt = clock; } }); return; }
+        if (isEndlessMode() && !rack.items.length) rack.items = [0, 1, 2, 3, 4].map((i) => ({ rot: Math.random() * 6.28, s: i, a: 1 }));
+        if (!isEndlessMode() && !rack.items.length) { me.push({ path: [P.drop, P.stand], d: 0.4, ez: 'soft' }, { fn: () => { state = 'done'; doneAt = clock; } }); return; }
         me.push({ path: [P.drop, P.turn, P.bend], d: 0.78, ez: 'soft' }, { d: 0.04 }, { fn: () => grab() }, { path: [P.turnHold, P.hold], d: 0.46, ez: 'soft' }, {
-          fn: () => { state = 'ready'; if (pressed && !holdBlock && (!ai.enabled || !currentPersona.isAI)) startCharge(); },
+          fn: () => { state = 'ready'; if (pressed && !holdBlock && !isEndlessMode()) startCharge(); },
         });
       },
     });
   }
   function startCharge() { state = 'charge'; chargeT = 0; charge = 0; me.clear(); me.chargeFrom = me.pose; }
-  function startGame() {
-    ensureAudio(); newRound(); mode = 'play';
-    $('overlay').classList.remove('on'); $('hud').classList.remove('hidden');
-    const isManual = !ai.enabled || !currentPersona.isAI;
+  function startGame(keepBalls = false) {
+    ensureAudio(); newRound(keepBalls); mode = 'play';
+    $('overlay').classList.remove('on'); $('startCard').classList.remove('show'); $('endCard').classList.remove('show');
+    $('hud').classList.remove('hidden');
+    const isManual = !isEndlessMode();
     $('hint').classList.toggle('hidden', !isManual || life.seenHint);
     $('againBtnText').textContent = '再来一轮';
-    pip.flashKey('R', 150); pip.setAction('idle', '新的一轮开始'); pip.say(pickRandom(currentPersona.lines.intro));
+    pip.flashKey('R', 150); pip.setAction('idle', isEndlessMode() ? '无限投篮中' : '新的一轮开始'); pip.say(pickRandom(currentPersona.lines.intro));
     updateHud();
   }
   function endGame() {
+    if (isEndlessMode()) return;
     mode = 'over'; life.games++;
     const res = { score: round.score, swishes: round.swishes, personaName: currentPersona.name, personaTitle: currentPersona.title, shots: round.shots.map((s) => (s.made ? (s.swish ? 2 : 1) : 0)) };
     const made = res.shots.filter((s) => s > 0).length, isBest = res.score > life.best;
@@ -1650,52 +1741,74 @@
   }
   function updateHud() {
     if (!round) return;
-    $('score').textContent = round.score; $('best').textContent = Math.max(life.best, round.score);
+    const endless = isEndlessMode();
+    $('hud').classList.toggle('endless', endless);
+    $('score').textContent = round.score;
+    $('hudSwish').textContent = round.swishes;
+    $('hudMiss').textContent = round.misses;
+    $('best').textContent = Math.max(life.best, round.score);
     $('hudPersonaName').textContent = currentPersona.name;
-    $('hudModeTag').textContent = ai.enabled && currentPersona.isAI ? `${currentPersona.title} · AI托管` : '手动操控中';
-    const n = round.shots.length;
-    let html = '';
-    for (let i = 0; i < ROUND; i++) {
-      const s = round.shots[i];
-      const cls = s && s.made === true ? (s.swish ? 'swish' : 'made') : s && s.made === false ? 'miss' : s ? 'fly' : (i === n && (me.hasBall || rack.items.length)) ? 'next' : '';
-      html += `<div class="dot ${cls}"></div>`;
+    $('hudModeTag').textContent = endless ? `${currentPersona.title} · 无限投篮` : '手动操控中';
+    if (endless) {
+      const resolved = round.makes + round.misses;
+      const acc = resolved > 0 ? Math.round((round.makes / resolved) * 100) : 0;
+      $('ballLabel').textContent = '∞ 无限篮球';
+      $('hudSubMeta').textContent = resolved > 0 ? `已投 ${resolved} 球 · 命中率 ${acc}%` : '无限连投中';
+    } else {
+      const n = round.shots.length;
+      let html = '';
+      for (let i = 0; i < ROUND; i++) {
+        const s = round.shots[i];
+        const cls = s && s.made === true ? (s.swish ? 'swish' : 'made') : s && s.made === false ? 'miss' : s ? 'fly' : (i === n && (me.hasBall || rack.items.length)) ? 'next' : '';
+        html += `<div class="dot ${cls}"></div>`;
+      }
+      $('tracker').innerHTML = html;
+      $('ballLabel').textContent = n < ROUND ? `第 ${n + 1} / ${ROUND} 球` : '最后一球';
+      $('hudSubMeta').textContent = '';
     }
-    $('tracker').innerHTML = html;
-    $('ballLabel').textContent = n < ROUND ? `第 ${n + 1} / ${ROUND} 球` : '最后一球';
     const st = $('streak'), s = round.streak;
     if (s >= 2) { const m = s >= 6 ? 3 : s >= 3 ? 2 : 1; st.textContent = m > 1 ? `🔥 ${s} 连中 · ×${m} 倍积分` : `✨ ${s} 连中`; st.classList.add('on'); }
     else st.classList.remove('on');
   }
   function down(fromAI = false) {
     ensureAudio();
-    if (!fromAI && ai.enabled && currentPersona.isAI && mode === 'play') { setAutoPlay(false); toast('已切换为手动接管！'); }
+    if (!fromAI && isEndlessMode() && mode === 'play') { setAutoPlay(false, false); toast('已关闭 Auto 模式，切为手动投篮（点顶部 Auto 按钮可恢复无限投篮）'); }
     pressed = true; if (mode !== 'play') return;
     if (state === 'ready') { SND.keyDown(); pip.setSpacePressed(true); startCharge(); }
   }
   function up(fromAI = false) {
-    if (!fromAI && ai.enabled && currentPersona.isAI) return;
+    if (!fromAI && isEndlessMode()) return;
     pressed = false; holdBlock = false;
     if (state === 'charge') { SND.keyUp(); pip.setSpacePressed(false); shoot(); if (!fromAI) { life.seenHint = true; $('hint').classList.add('hidden'); } }
   }
   function selectPersona(id, notify = true) {
     if (!PERSONAS[id]) return;
-    currentPersonaId = id; currentPersona = PERSONAS[id]; $('personaSelect').value = id;
+    currentPersonaId = id; currentPersona = PERSONAS[id]; if (currentPersona.isAI) lastAutoPersonaId = id; $('personaSelect').value = id;
     document.querySelectorAll('.p-card').forEach((c) => c.classList.toggle('selected', c.dataset.id === id));
     ai.setPersona(currentPersona); pip.setPersona(currentPersona);
-    if (currentPersona.isAI) { setAutoPlay(true, false); $('playBtnText').textContent = `开始 ${currentPersona.name} AI 直播投篮`; }
+    if (currentPersona.isAI) { setAutoPlay(true, false); $('playBtnText').textContent = `开始 ${currentPersona.name} 直播投篮`; }
     else { setAutoPlay(false, false); $('playBtnText').textContent = '开始手动投篮'; }
     updateHud();
     if (notify) { pip.say(pickRandom(currentPersona.lines.intro)); toast(`已切换角色：${currentPersona.title} · ${currentPersona.name}`); }
   }
   function setAutoPlay(flag, showToast = false) {
+    const wasEndless = isEndlessMode();
     ai.setEnabled(flag && currentPersona.isAI);
-    const active = ai.enabled;
+    const active = isEndlessMode();
     $('btnAutoPlay').classList.toggle('active', active);
-    $('autoPlayText').textContent = active ? 'AI托管中' : '手动模式';
+    $('autoPlayText').textContent = active ? 'Auto 开' : 'Auto 关';
+    $('btnAutoLoop').classList.toggle('hidden', true);
+    if (active) {
+      $('overlay').classList.remove('on'); $('startCard').classList.remove('show'); $('endCard').classList.remove('show');
+      $('hud').classList.remove('hidden');
+      if (mode !== 'play') startGame(false);
+      else if (!wasEndless) { newRound(true); pip.setAction('idle', '无限投篮中'); }
+    } else if (mode === 'play' && wasEndless) {
+      newRound(true); pip.setAction('idle', '手动投篮');
+    }
     $('hint').classList.toggle('hidden', mode !== 'play' || active || life.seenHint);
-    if (!active) $('aiTargetHint').textContent = '';
     updateHud();
-    if (showToast) toast(active ? `${currentPersona.name} 已接管键盘自动投篮` : '已切回手动模式：长按空格或屏幕投篮');
+    if (showToast) toast(active ? '已开启 Auto 无限投篮模式' : '已关闭 Auto 模式，切为手动十球投篮');
   }
 
   // Build Persona Grid
@@ -1722,7 +1835,7 @@
   window.addEventListener('keyup', (e) => { if (e.code === 'Space' || e.code === 'Enter') up(false); });
   $('playBtn').addEventListener('click', startGame); $('againBtn').addEventListener('click', startGame);
   $('personaSelect').addEventListener('change', (e) => selectPersona(e.target.value, true));
-  $('btnAutoPlay').addEventListener('click', () => { if (!currentPersona.isAI) selectPersona('campus_girl', true); else setAutoPlay(!ai.enabled, true); });
+  $('btnAutoPlay').addEventListener('click', () => { if (!currentPersona.isAI) selectPersona(lastAutoPersonaId || 'campus_girl', true); else setAutoPlay(!isEndlessMode(), true); });
   $('btnAutoLoop').addEventListener('click', (e) => { const n = !ai.autoLoop; ai.setAutoLoop(n); e.currentTarget.classList.toggle('active', n); toast(n ? '已开启直播自动连播' : '已关闭自动连播'); });
   $('btnPipToggle').addEventListener('click', (e) => { const n = !pip.isVisible(); pip.setVisible(n); e.currentTarget.classList.toggle('active', n); });
   $('btnDanmakuToggle').addEventListener('click', (e) => { const n = !danmaku.enabled; danmaku.setEnabled(n); e.currentTarget.classList.toggle('active', n); if (n) danmaku.pushViewer(pickRandom(currentPersona.danmaku.ambient)); });
@@ -1798,10 +1911,15 @@
     rack.items.forEach((it, j) => { it.s += (5 - rack.items.length + j - it.s) * Math.min(1, dt * 7); it.a = Math.min(1, it.a + dt * 3); });
     for (let i = popups.length - 1; i >= 0; i--) { popups[i].t += dt; if (popups[i].t > 1.1) popups.splice(i, 1); }
     for (let i = bits.length - 1; i >= 0; i--) { const b = bits[i]; b.t += dt; b.vy += 260 * dt; b.vx *= 1 - 1.5 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.r += b.vr * dt; if (b.t > b.life) bits.splice(i, 1); }
-    if (mode === 'play' && state === 'done' && round.shots.every((s) => s.made !== null) && clock - doneAt > 0.9) endGame();
+    if (!isEndlessMode() && mode === 'play' && state === 'done' && round.shots.every((s) => s.made !== null) && clock - doneAt > 0.9) endGame();
   }
 
+  const unlockAudioOnce = () => { ensureAudio(); window.removeEventListener('pointerdown', unlockAudioOnce); window.removeEventListener('keydown', unlockAudioOnce); };
+  window.addEventListener('pointerdown', unlockAudioOnce, { passive: true });
+  window.addEventListener('keydown', unlockAudioOnce, { passive: true });
+
   selectPersona('campus_girl', false);
+  if (isEndlessMode() && mode !== 'play') startGame(false);
   let last = performance.now();
   function frame(now) { const dt = Math.min(0.05, (now - last) / 1000); last = now; update(dt); render(); requestAnimationFrame(frame); }
   requestAnimationFrame(frame);

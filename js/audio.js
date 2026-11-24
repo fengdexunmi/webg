@@ -164,7 +164,9 @@ export const SND = {
 
 export function buzz(ms) {
   try {
-    if (navigator.vibrate) navigator.vibrate(ms);
+    if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) {
+      navigator.vibrate(ms);
+    }
   } catch {
     // ignore
   }
