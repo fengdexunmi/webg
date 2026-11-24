@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>《林小夏的数字人生》高保真交互设计稿</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    :root {
+      --background: #f8fafc;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --foreground: #0f172a;
+      --muted-foreground: #64748b;
+      --primary: #18181b;
+      --primary-foreground: #ffffff;
+    }
+    .sketch-paper {
+      transition: background-color 0.45s ease;
+      background-image: radial-gradient(circle, rgba(31, 41, 55, 0.14) 0.9px, transparent 1.1px);
+      background-size: 22px 22px;
+      background-position: 11px 11px;
+    }
+    .sketch-paper.night-paper {
+      background-image: radial-gradient(circle, rgba(148, 163, 184, 0.18) 0.9px, transparent 1.1px);
+    }
+    .glass-hud {
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    @keyframes bubbleFloat {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-3px); }
+    }
+    .speech-pop {
+      animation: bubbleFloat 3.2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 md:p-6 space-y-5">
+  <!-- 顶部设计稿导航头 -->
+  <header class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-[var(--border)]">
+    <div>
+      <div class="flex items-center gap-2">
+        <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-[var(--primary)] text-[var(--primary-foreground)]">Hi-Fi 交互原型稿 v1.0</span>
+        <h1 class="text-lg font-bold tracking-tight">《林小夏的数字人生》交互与视觉设计规范</h1>
+      </div>
+      <p class="text-xs text-[var(--muted-foreground)] mt-1">
+        点击下方「主舞台原型 / 真实周课表 / 视觉与图层规范」切换视图；拖动 24h 时间轴或点击任意课程即可实时预览场景与 3D 动作状态。
+      </p>
+    </div>
+
+    <nav class="flex items-center gap-1.5 bg-[var(--card)] border border-[var(--border)] p-1 rounded-xl text-xs font-semibold">
+      <button data-tab="stage" class="tab-btn px-3 py-1.5 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] transition">🖥 主舞台交互原型</button>
+      <button data-tab="timetable" class="tab-btn px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition">📅 真实大二周课表</button>
+      <button data-tab="spec" class="tab-btn px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition">🎨 视觉与渲染规范</button>
+    </nav>
+  </header>
+
+  <!-- ==================== TAB 1: 主舞台高保真交互原型 ==================== -->
+  <section id="tab-stage" class="space-y-4">
+    <!-- 模拟浏览器视口画布 -->
+    <div id="stageViewport" class="sketch-paper relative w-full rounded-2xl border border-[var(--border)] shadow-sm overflow-hidden select-none" style="height: 540px; background-color: #ffffff; color: #1f2329;">
+
+      <!-- 实时手绘2D场景 + 3D林小夏模拟渲染 Canvas -->
+      <canvas id="prototypeCanvas" class="absolute inset-0 w-full h-full block cursor-pointer"></canvas>
+
+      <!-- 左上角：校园时钟 + 当前日程 + 四维状态胶囊 (对应 PRD 6.1) -->
+      <div class="glass-hud absolute top-4 left-4 z-10 rounded-2xl p-3.5 shadow-sm border max-w-xs space-y-2.5" id="hudCard" style="background: rgba(255,255,255,0.92); border-color: rgba(0,0,0,0.08);">
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-baseline gap-2">
+            <span id="clockTimeText" class="text-2xl font-extrabold tabular-nums tracking-tight">10:15</span>
+            <span id="clockDayText" class="text-xs font-semibold opacity-75">周二 · 第8周</span>
+          </div>
+          <button id="btnSyncMode" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold" style="background: #fef3c7; color: #92400e; border: 1px solid rgba(180,83,9,0.2);">
+            <span id="syncDot" class="w-1.5 h-1.5 rounded-full" style="background: #16a34a;"></span>
+            <span id="syncModeLabel">实时同步</span>
+          </button>
+        </div>
+
+        <div class="pt-2 border-t" style="border-color: rgba(0,0,0,0.07);">
+          <div class="flex items-center justify-between text-xs font-bold">
+            <span id="currentEventTitle">📚 数据结构与算法</span>
+            <span id="currentLocationTag" class="font-medium opacity-70">阶梯教室 A108</span>
+          </div>
+          <div class="w-full h-1.5 rounded-full mt-1.5 overflow-hidden" style="background: rgba(0,0,0,0.07);">
+            <div id="eventProgressFill" class="h-full rounded-full transition-all duration-300" style="width: 45%; background: #f59e0b;"></div>
+          </div>
+        </div>
+
+        <!-- 四维状态条 -->
+        <div class="grid grid-cols-4 gap-1.5 pt-1 text-xs tabular-nums">
+          <div class="px-1.5 py-1 rounded-lg text-center" style="background: rgba(245,158,11,0.1);">
+            <div class="font-bold" style="color: #b45309;">⚡<span id="statEnergy">84</span></div>
+            <div style="font-size: 10px; opacity: 0.7;">精力</div>
+          </div>
+          <div class="px-1.5 py-1 rounded-lg text-center" style="background: rgba(37,99,235,0.1);">
+            <div class="font-bold" style="color: #1d4ed8;">📖<span id="statFocus">92</span></div>
+            <div style="font-size: 10px; opacity: 0.7;">专注</div>
+          </div>
+          <div class="px-1.5 py-1 rounded-lg text-center" style="background: rgba(22,163,74,0.1);">
+            <div class="font-bold" style="color: #15803d;">🏀<span id="statVitality">76</span></div>
+            <div style="font-size: 10px; opacity: 0.7;">活力</div>
+          </div>
+          <div class="px-1.5 py-1 rounded-lg text-center" style="background: rgba(236,72,153,0.1);">
+            <div class="font-bold" style="color: #be185d;">✨<span id="statMood">90</span></div>
+            <div style="font-size: 10px; opacity: 0.7;">心情</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右上角：顶部功能胶囊工具栏 (对应 PRD 6.2) -->
+      <div class="glass-hud absolute top-4 right-4 z-10 flex flex-wrap items-center gap-1.5 p-1.5 rounded-2xl shadow-sm border text-xs font-semibold" id="topToolbar" style="background: rgba(255,255,255,0.92); border-color: rgba(0,0,0,0.08);">
+        <select id="weekdaySelect" class="px-2 py-1 rounded-lg cursor-pointer outline-none font-bold" style="background: rgba(0,0,0,0.05);">
+          <option value="0">周一</option>
+          <option value="1" selected>周二</option>
+          <option value="2">周三</option>
+          <option value="3">周四</option>
+          <option value="4">周五</option>
+          <option value="5">周六</option>
+          <option value="6">周日</option>
+        </select>
+        <button id="btnOpenScheduleJump" class="px-2.5 py-1 rounded-lg hover:opacity-80 transition" style="background: rgba(0,0,0,0.05);">📅 周课表</button>
+        <button id="btnPomodoro" class="px-2.5 py-1 rounded-lg hover:opacity-80 transition" style="background: rgba(0,0,0,0.05);">⏱ 伴学 25:00</button>
+        <button id="btnDiaryToggle" class="px-2.5 py-1 rounded-lg hover:opacity-80 transition" style="background: rgba(0,0,0,0.05);">📓 今日手账</button>
+      </div>
+
+      <!-- 林小夏头顶碎碎念气泡 -->
+      <div id="speechBubble" class="speech-pop pointer-events-none absolute z-10 px-3.5 py-2 rounded-2xl text-xs font-semibold shadow-sm border max-w-xs" style="left: 42%; top: 20%; background: rgba(255,255,255,0.95); border-color: rgba(31,35,41,0.16); color: #1f2329;">
+        <span id="speechText">二叉树旋转这节可得记仔细点，下周上机要考～</span>
+      </div>
+
+      <!-- 右侧滑出：今日手账微卡片 -->
+      <aside id="diaryDrawer" class="hidden glass-hud absolute right-4 top-16 z-20 w-64 rounded-2xl p-3.5 shadow-md border text-xs space-y-2" style="background: rgba(255,255,255,0.96); border-color: rgba(0,0,0,0.1); color: #1f2329;">
+        <div class="flex items-center justify-between font-bold pb-1.5 border-b" style="border-color: rgba(0,0,0,0.08);">
+          <span>📓 林小夏的今日手账</span>
+          <button id="btnCloseDiary" class="opacity-60 hover:opacity-100">✕</button>
+        </div>
+        <ul id="diaryList" class="space-y-1.5 leading-relaxed opacity-85">
+          <li>• 07:40 在桂园买到了热乎豆浆和鲜肉包</li>
+          <li>• 10:00 《数据结构》前排占座成功！</li>
+          <li>• 期待下午 4 点去 2 号球场练十球空心～</li>
+        </ul>
+      </aside>
+
+      <!-- 底部上方：场景自适应轻互动浮岛 (对应 PRD 6.3) -->
+      <div class="glass-hud absolute left-1/2 -translate-x-1/2 bottom-16 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full shadow-sm border text-xs font-semibold" id="actionDock" style="background: rgba(255,255,255,0.93); border-color: rgba(0,0,0,0.09);">
+        <button data-act="coffee" class="act-btn px-2.5 py-1 rounded-full hover:scale-105 transition" style="background: #fef3c7; color: #78350f;">☕ 投喂冰美式</button>
+        <button data-act="poke" class="act-btn px-2.5 py-1 rounded-full hover:scale-105 transition" style="background: rgba(0,0,0,0.05);">👋 戳一戳</button>
+        <button data-act="hoops" class="act-btn px-2.5 py-1 rounded-full hover:scale-105 transition" style="background: rgba(0,0,0,0.05);">🏀 约去投两球</button>
+        <button data-act="cat" class="act-btn px-2.5 py-1 rounded-full hover:scale-105 transition" style="background: rgba(0,0,0,0.05);">🐱 呼唤小橘猫</button>
+      </div>
+
+      <!-- 底部：24 小时彩色分段日程时间轴 (对应 PRD 6.4) -->
+      <div class="glass-hud absolute left-4 right-4 bottom-3 z-10 px-4 py-2 rounded-xl border flex items-center gap-3 text-xs" id="timelineBar" style="background: rgba(255,255,255,0.92); border-color: rgba(0,0,0,0.08);">
+        <span class="font-bold whitespace-nowrap opacity-75">24h 时间轴</span>
+        <div class="relative flex-1 flex items-center">
+          <input id="timeSlider" type="range" min="0" max="1439" value="615" class="w-full cursor-pointer accent-amber-500" />
+        </div>
+        <span id="sliderReadout" class="font-mono font-bold tabular-nums w-12 text-right">10:15</span>
+        <button id="btnResetLive" class="px-2 py-0.5 rounded-md font-semibold whitespace-nowrap" style="background: rgba(0,0,0,0.06);">回到现在</button>
+      </div>
+    </div>
+
+    <!-- 8 大手绘场景直达预览器 -->
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3.5 space-y-2">
+      <div class="flex items-center justify-between text-xs">
+        <span class="font-bold">🗺 八大「2D 手绘纸面 × 3D 林小夏」场景快速走查（点击立即切换预览）：</span>
+        <span class="text-[var(--muted-foreground)]">正式实现中由 `alexis.glb` 77 骨骼实时 IK 驱动</span>
+      </div>
+      <div id="sceneQuickBar" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 text-xs"></div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 2: 大学生真实周课表与 ICS 导入设计 ==================== -->
+  <section id="tab-timetable" class="hidden space-y-4">
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 class="text-sm font-bold">📅 林小夏的大二下学期真实课表（点击任意课程/活动块可立即跳转主舞台预览）</h2>
+          <p class="text-xs text-[var(--muted-foreground)]">支持单格自定义编辑，以及导入高校教务 / WakeUp 导出的 `.ics` 日历文件与个人真实课程表完全同步。</p>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="px-2 py-0.5 rounded bg-blue-500/15 text-blue-600 font-semibold">专业课/自习</span>
+          <span class="px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 font-semibold">体育/投篮</span>
+          <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 font-semibold">餐饮/作息</span>
+          <span class="px-2 py-0.5 rounded bg-pink-500/15 text-pink-600 font-semibold">社团/娱乐</span>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+              <th class="py-2 px-2 text-left w-28">节次 / 时间</th>
+              <th class="py-2 px-2 text-left">周一</th>
+              <th class="py-2 px-2 text-left">周二</th>
+              <th class="py-2 px-2 text-left">周三</th>
+              <th class="py-2 px-2 text-left">周四</th>
+              <th class="py-2 px-2 text-left">周五</th>
+              <th class="py-2 px-2 text-left">周六</th>
+              <th class="py-2 px-2 text-left">周日</th>
+            </tr>
+          </thead>
+          <tbody id="timetableBody" class="divide-y divide-[var(--border)]"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 3: 视觉系统与三层正交架构规范 ==================== -->
+  <section id="tab-spec" class="hidden grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 space-y-2.5">
+      <h3 class="font-bold text-sm">1. 纸面与手绘墨线视觉 Token</h3>
+      <ul class="space-y-2 text-[var(--muted-foreground)] leading-relaxed">
+        <li><strong class="text-[var(--foreground)]">白昼点阵纸 (`#FFFFFF`)</strong>：24px 间距浅灰圆点阵，营造手账方格本呼吸感。</li>
+        <li><strong class="text-[var(--foreground)]">黄昏暖杏纸 (`#FFF9F0`)</strong>：`17:00–19:00` 自动叠入夕阳暖调与斜长投影。</li>
+        <li><strong class="text-[var(--foreground)]">静谧熄灯纸 (`#131722`)</strong>：`23:00–06:30` 转为深蓝灰点阵 + 暖色小夜灯局部照明。</li>
+        <li><strong class="text-[var(--foreground)]">微抖手绘墨线 (`#141414`)</strong>：所有家具、黑板、篮筐、餐盘、小猫均通过 `WOBBLE` 双正弦函数在每帧产生 0.35px 微幅手绘生命感。</li>
+      </ul>
+    </div>
+
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 space-y-2.5">
+      <h3 class="font-bold text-sm">2. 三层正交遮挡合成规范</h3>
+      <ul class="space-y-2 text-[var(--muted-foreground)] leading-relaxed">
+        <li><strong class="text-[var(--foreground)]">Layer 1 (`#bgSketchCanvas`)</strong>：绘制地面线、墙面窗景、黑板、书架、篮架等处于人物身后的 2D 手绘元素。</li>
+        <li><strong class="text-[var(--foreground)]">Layer 2 (`#avatar3dCanvas`)</strong>：Three.js 透明 WebGL 正交相机，驱动 `alexis.glb` 站立/落座/慢跑/投篮 + `ShadowMaterial` 柔和接触阴影。</li>
+        <li><strong class="text-[var(--foreground)]">Layer 3 (`#fgSketchCanvas`)</strong>：绘制课桌前挡板（自然遮住坐姿大腿）、手持 2D 篮球/书本/咖啡杯、小橘猫与头顶碎碎念气泡。</li>
+      </ul>
+    </div>
+
+    <div class="bg-[var(--card)] border border-[var(--border)] rounded-2xl p-4 space-y-2.5">
+      <h3 class="font-bold text-sm">3. 3D 骨骼动作状态机接口</h3>
+      <ul class="space-y-2 text-[var(--muted-foreground)] leading-relaxed">
+        <li><strong class="text-[var(--foreground)]">`sit_write` / `sit_type`</strong>：骨盆落于椅面 `Y=-42`，屈膝踩地，右手沿桌面轨迹微幅书写或双手敲击键盘。</li>
+        <li><strong class="text-[var(--foreground)]">`hoops_play`</strong>：直接挂载 `webg` 十球投篮物理模块，支持 Auto 练球与玩家空格键无缝接管。</li>
+        <li><strong class="text-[var(--foreground)]">`jog_loop` & `pet_cat`</strong>：正弦步态摆臂慢跑，点击前景手绘小猫触发转身下蹲摸头交互。</li>
+        <li><strong class="text-[var(--foreground)]">`stand_sing`</strong>：右手扶复古手绘立麦，身体与头部随节拍轻柔摆动。</li>
+      </ul>
+    </div>
+  </section>
+
+  <script>
+    const SCENES = {
+      classroom: { name: '阶梯教室', icon: '📚', cat: 'study', loc: '阶梯教室 A108', speech: '二叉树旋转这节可得记仔细点，下周上机要考～' },
+      basketball: { name: '室外球场', icon: '🏀', cat: 'sport', loc: '南区2号篮球场', speech: '下课活动筋骨！今天争取连进五个纯空心！' },
+      library: { name: '图书馆靠窗', icon: '📖', cat: 'study', loc: '图书馆三楼靠窗位', speech: '戴上耳机进心流模式，把图形学大作业肝完！' },
+      canteen: { name: '桂园食堂', icon: '🍱', cat: 'life', loc: '桂园一楼窗口', speech: '阿姨今天打糖醋排骨手一点没抖，太幸福啦！' },
+      track: { name: '湖畔慢跑', icon: '🏃‍♀️', cat: 'sport', loc: '未名湖环湖绿道', speech: '晚风吹着好舒服呀，诶？前面长椅下是不是那只小橘猫！' },
+      ktv_club: { name: '音乐角K歌', icon: '🎤', cat: 'fun', loc: '学生活动中心K歌房', speech: '周末放松局！点一首怀旧金曲开开嗓 ♪' },
+      cafe: { name: '街角咖啡屋', icon: '☕', cat: 'fun', loc: '校门外木棉咖啡书屋', speech: '没有早八的周末午后，画两页速写放空一下～' },
+      dorm: { name: '梅园402女寝', icon: '🛏', cat: 'life', loc: '梅园 402 上床下桌', speech: '回到快乐小窝！洗漱完听会儿歌就准备睡啦～' },
+    };
+
+    const DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    // Full weekly schedule generator (minutes from 00:00)
+    const WEEKLY_SLOTS = [
+      { range: [440, 479], label: '07:20–08:00', cells: [
+        ['晨起洗漱 & 早餐', 'canteen'], ['晨起洗漱 & 早餐', 'canteen'], ['晨起洗漱 & 早餐', 'canteen'],
+        ['晨起洗漱 & 早餐', 'canteen'], ['睡懒觉 & 豆浆', 'dorm'], ['自然醒慢生活', 'dorm'], ['自然醒慢生活', 'dorm']
+      ]},
+      { range: [480, 599], label: '08:00–09:50 (1-2节)', cells: [
+        ['概率论与数理统计', 'classroom'], ['图书馆早自习', 'library'], ['计算机图形学', 'classroom'],
+        ['大学英语视听说', 'classroom'], ['没早八 · 宿舍整理', 'dorm'], ['晨间湖畔慢跑', 'track'], ['街角咖啡看书', 'cafe']
+      ]},
+      { range: [600, 709], label: '10:00–11:50 (3-4节)', cells: [
+        ['交互设计原理', 'classroom'], ['数据结构与算法', 'classroom'], ['三维造型与动画', 'classroom'],
+        ['图书馆刷题写码', 'library'], ['数字影像创作', 'classroom'], ['图书馆自由阅读', 'library'], ['宿舍手账速写', 'dorm']
+      ]},
+      { range: [710, 839], label: '11:50–14:00 (午间)', cells: [
+        ['食堂干饭 & 午休', 'canteen'], ['食堂干饭 & 午休', 'canteen'], ['食堂干饭 & 午休', 'canteen'],
+        ['食堂干饭 & 午休', 'canteen'], ['小火锅 & 午休', 'canteen'], ['周末食堂聚餐', 'canteen'], ['轻食简餐午休', 'canteen']
+      ]},
+      { range: [840, 959], label: '14:00–16:00 (5-6节)', cells: [
+        ['图形学上机实验', 'library'], ['中国近现代史纲要', 'classroom'], ['体育专项：女篮课', 'basketball'],
+        ['UI/UX 课程设计', 'classroom'], ['社团活动筹备', 'cafe'], ['好友KTV包间欢唱', 'ktv_club'], ['复盘下周计划', 'library']
+      ]},
+      { range: [960, 1079], label: '16:00–18:00 (7-8节)', cells: [
+        ['十球投篮特训', 'basketball'], ['湖畔 3km 慢跑撸猫', 'track'], ['院女篮半场加练', 'basketball'],
+        ['十球投篮特训', 'basketball'], ['湖畔散步看夕阳', 'track'], ['KTV 怀旧金曲合唱', 'ktv_club'], ['傍晚投篮热身', 'basketball']
+      ]},
+      { range: [1080, 1169], label: '18:00–19:30 (傍晚)', cells: [
+        ['二食堂晚餐', 'canteen'], ['桂园食堂晚餐', 'canteen'], ['加鸡腿奖励晚餐', 'canteen'],
+        ['桂园食堂晚餐', 'canteen'], ['周五校门小吃街', 'cafe'], ['商业街聚餐', 'canteen'], ['食堂清淡晚餐', 'canteen']
+      ]},
+      { range: [1170, 1289], label: '19:30–21:30 (晚间)', cells: [
+        ['图书馆晚自习', 'library'], ['选修：电影音乐鉴赏', 'classroom'], ['图书馆晚自习', 'library'],
+        ['小组作业讨论', 'dorm'], ['音乐角弹唱 K歌', 'ktv_club'], ['宿舍追番 & 游戏', 'dorm'], ['整理书包备课', 'dorm']
+      ]},
+      { range: [1290, 1379], label: '21:30–23:00 (睡前)', cells: [
+        ['宿舍桌前听歌放松', 'dorm'], ['写手账 & 拉伸', 'dorm'], ['睡前课外阅读', 'dorm'],
+        ['宿舍听歌写手账', 'dorm'], ['周末联机放松', 'dorm'], ['深夜校园电台', 'dorm'], ['早睡养精蓄锐', 'dorm']
+      ]},
+      { range: [0, 439], label: '23:00–07:20 (熄灯)', cells: [
+        ['梅园402熄灯安睡', 'dorm'], ['梅园402熄灯安睡', 'dorm'], ['梅园402熄灯安睡', 'dorm'],
+        ['梅园402熄灯安睡', 'dorm'], ['梅园402熄灯安睡', 'dorm'], ['梅园402熄灯安睡', 'dorm'], ['梅园402熄灯安睡', 'dorm']
+      ]},
+    ];
+
+    const state = {
+      dayIdx: 1,
+      minutes: 615, // 10:15
+      liveSync: false,
+      forcedScene: null,
+      energy: 84,
+      focus: 92,
+      vitality: 76,
+      mood: 90,
+      catNear: false,
+      ballT: 0,
+      clock: 0,
+    };
+
+    const cv = document.getElementById('prototypeCanvas');
+    const ctx = cv.getContext('2d');
+
+    function getSlotFor(dayIdx, mins) {
+      if (mins >= 1380 || mins < 440) {
+        return { title: '🌙 梅园402熄灯安睡', sceneKey: 'dorm', sleeping: true, pct: 60 };
+      }
+      for (const s of WEEKLY_SLOTS) {
+        if (mins >= s.range[0] && mins <= s.range[1]) {
+          const [title, sceneKey] = s.cells[dayIdx];
+          const pct = Math.round(((mins - s.range[0]) / Math.max(1, s.range[1] - s.range[0])) * 100);
+          return { title: `${SCENES[sceneKey].icon} ${title}`, sceneKey, sleeping: false, pct };
+        }
+      }
+      return { title: '📚 校园时光', sceneKey: 'classroom', sleeping: false, pct: 50 };
+    }
+
+    function fmtTime(mins) {
+      const h = String(Math.floor(mins / 60) % 24).padStart(2, '0');
+      const m = String(Math.floor(mins % 60)).padStart(2, '0');
+      return `${h}:${m}`;
+    }
+
+    function syncUiFromState() {
+      const slot = getSlotFor(state.dayIdx, state.minutes);
+      const sceneKey = state.forcedScene || slot.sceneKey;
+      const sc = SCENES[sceneKey];
+      const isNight = state.minutes >= 1380 || state.minutes < 400;
+      const isDusk = state.minutes >= 1030 && state.minutes < 1160;
+
+      const vp = document.getElementById('stageViewport');
+      vp.classList.toggle('night-paper', isNight);
+      vp.style.backgroundColor = isNight ? '#131722' : isDusk ? '#fff8ee' : '#ffffff';
+
+      document.getElementById('clockTimeText').textContent = fmtTime(state.minutes);
+      document.getElementById('clockDayText').textContent = `${DAYS[state.dayIdx]} · 第8周`;
+      document.getElementById('sliderReadout').textContent = fmtTime(state.minutes);
+      document.getElementById('timeSlider').value = state.minutes;
+      document.getElementById('currentEventTitle').textContent = state.forcedScene ? `${sc.icon} 漫游预览：${sc.name}` : slot.title;
+      document.getElementById('currentLocationTag').textContent = sc.loc;
+      document.getElementById('eventProgressFill').style.width = `${slot.pct}%`;
+
+      document.getElementById('statEnergy').textContent = state.energy;
+      document.getElementById('statFocus').textContent = state.focus;
+      document.getElementById('statVitality').textContent = state.vitality;
+      document.getElementById('statMood').textContent = state.mood;
+
+      document.getElementById('syncModeLabel').textContent = state.liveSync ? '实时同步' : '时间预览';
+      document.getElementById('syncDot').style.background = state.liveSync ? '#16a34a' : '#f59e0b';
+
+      document.querySelectorAll('.scene-pill-btn').forEach((b) => {
+        const active = b.dataset.scene === sceneKey;
+        b.className = `scene-pill-btn px-2.5 py-2 rounded-lg border text-left transition flex items-center gap-1.5 font-semibold ${
+          active
+            ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-transparent'
+            : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:opacity-85'
+        }`;
+      });
+    }
+
+    function setBubble(text) {
+      document.getElementById('speechText').textContent = text;
+    }
+
+    // Build 8-scene quick switcher
+    const quickBar = document.getElementById('sceneQuickBar');
+    Object.entries(SCENES).forEach(([key, sc]) => {
+      const btn = document.createElement('button');
+      btn.dataset.scene = key;
+      btn.innerHTML = `<span>${sc.icon}</span><span class="truncate">${sc.name}</span>`;
+      btn.addEventListener('click', () => {
+        state.forcedScene = key;
+        state.liveSync = false;
+        setBubble(sc.speech);
+        syncUiFromState();
+      });
+      quickBar.appendChild(btn);
+    });
+
+    // Build Weekly Timetable Matrix
+    const tbody = document.getElementById('timetableBody');
+    const catBadge = {
+      study: 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 border-blue-500/20',
+      sport: 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 border-amber-500/25',
+      life: 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 border-emerald-500/20',
+      fun: 'bg-pink-500/10 hover:bg-pink-500/20 text-pink-600 border-pink-500/20',
+    };
+    WEEKLY_SLOTS.slice(0, 9).forEach((slot) => {
+      const tr = document.createElement('tr');
+      const tdTime = document.createElement('td');
+      tdTime.className = 'py-2 px-2 font-mono text-[var(--muted-foreground)] whitespace-nowrap';
+      tdTime.textContent = slot.label;
+      tr.appendChild(tdTime);
+
+      slot.cells.forEach(([title, scKey], dIdx) => {
+        const td = document.createElement('td');
+        td.className = 'p-1.5';
+        const sc = SCENES[scKey];
+        const btn = document.createElement('button');
+        btn.className = `w-full text-left px-2 py-1.5 rounded-lg border transition font-medium ${catBadge[sc.cat]}`;
+        btn.innerHTML = `<div class="font-bold truncate">${sc.icon} ${title}</div><div class="opacity-70 truncate" style="font-size:10px;">${sc.loc}</div>`;
+        btn.addEventListener('click', () => {
+          state.dayIdx = dIdx;
+          state.minutes = slot.range[0] + 15;
+          state.forcedScene = null;
+          state.liveSync = false;
+          document.getElementById('weekdaySelect').value = String(dIdx);
+          setBubble(sc.speech);
+          switchTab('stage');
+          syncUiFromState();
+        });
+        td.appendChild(btn);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+
+    // Tab switching
+    function switchTab(tabId) {
+      ['stage', 'timetable', 'spec'].forEach((id) => {
+        document.getElementById(`tab-${id}`).classList.toggle('hidden', id !== tabId);
+      });
+      document.querySelectorAll('.tab-btn').forEach((b) => {
+        const on = b.dataset.tab === tabId;
+        b.className = `tab-btn px-3 py-1.5 rounded-lg transition ${
+          on ? 'bg-[var(--primary)] text-[var(--primary-foreground)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
+        }`;
+      });
+    }
+    document.querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+
+    document.getElementById('btnOpenScheduleJump').addEventListener('click', () => switchTab('timetable'));
+    document.getElementById('btnDiaryToggle').addEventListener('click', () => {
+      document.getElementById('diaryDrawer').classList.toggle('hidden');
+    });
+    document.getElementById('btnCloseDiary').addEventListener('click', () => {
+      document.getElementById('diaryDrawer').classList.add('hidden');
+    });
+
+    document.getElementById('weekdaySelect').addEventListener('change', (e) => {
+      state.dayIdx = parseInt(e.target.value, 10);
+      state.forcedScene = null;
+      state.liveSync = false;
+      const slot = getSlotFor(state.dayIdx, state.minutes);
+      setBubble(SCENES[slot.sceneKey].speech);
+      syncUiFromState();
+    });
+
+    document.getElementById('timeSlider').addEventListener('input', (e) => {
+      state.minutes = parseInt(e.target.value, 10);
+      state.forcedScene = null;
+      state.liveSync = false;
+      const slot = getSlotFor(state.dayIdx, state.minutes);
+      setBubble(slot.sleeping ? 'Zzz… 明天还有早八，做个好梦～' : SCENES[slot.sceneKey].speech);
+      syncUiFromState();
+    });
+
+    function applyRealClock() {
+      const now = new Date();
+      state.dayIdx = (now.getDay() + 6) % 7;
+      state.minutes = now.getHours() * 60 + now.getMinutes();
+      state.forcedScene = null;
+      state.liveSync = true;
+      document.getElementById('weekdaySelect').value = String(state.dayIdx);
+      const slot = getSlotFor(state.dayIdx, state.minutes);
+      setBubble(slot.sleeping ? 'Zzz… 深夜熄灯充电中～' : SCENES[slot.sceneKey].speech);
+      syncUiFromState();
+    }
+
+    document.getElementById('btnResetLive').addEventListener('click', applyRealClock);
+    document.getElementById('btnSyncMode').addEventListener('click', applyRealClock);
+
+    document.getElementById('btnPomodoro').addEventListener('click', () => {
+      state.forcedScene = 'library';
+      state.focus = Math.min(100, state.focus + 6);
+      setBubble('⏱ 25:00 伴学番茄钟已开启！我们一起专注，不许偷偷刷手机哦～');
+      syncUiFromState();
+    });
+
+    // Companion Actions
+    document.querySelectorAll('.act-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const act = btn.dataset.act;
+        const diary = document.getElementById('diaryList');
+        if (act === 'coffee') {
+          state.energy = Math.min(100, state.energy + 10);
+          state.mood = Math.min(100, state.mood + 6);
+          setBubble('哇！冰美式续命成功 ⚡ 瞬间清醒，满血复活！');
+          diary.insertAdjacentHTML('afterbegin', `<li>• ${fmtTime(state.minutes)} 收到投喂的一杯冰美式 ☕</li>`);
+        } else if (act === 'poke') {
+          state.mood = Math.min(100, state.mood + 4);
+          setBubble('嘿嘿，我在呢！今天也要元气满满呀 👋');
+        } else if (act === 'hoops') {
+          state.forcedScene = 'basketball';
+          state.vitality = Math.min(100, state.vitality + 9);
+          state.ballT = 0.01;
+          setBubble('走！去2号场投两球，看我给你表演一个空心三分 🏀');
+          diary.insertAdjacentHTML('afterbegin', `<li>• ${fmtTime(state.minutes)} 临时去球场投了一组三分球 🏀</li>`);
+        } else if (act === 'cat') {
+          state.catNear = true;
+          state.mood = Math.min(100, state.mood + 8);
+          setBubble('咪咪过来啦！小橘猫今天肚皮圆滚滚的 🐱');
+        }
+        syncUiFromState();
+      });
+    });
+
+    // ==================== Hand-Drawn Sketch + 3D Shaded Avatar Prototype Renderer ====================
+    function wobbleLine(c, x1, y1, x2, y2, t, lw = 2) {
+      c.lineWidth = lw;
+      c.lineCap = 'round';
+      c.beginPath();
+      const steps = 8;
+      for (let i = 0; i <= steps; i++) {
+        const u = i / steps;
+        const n = Math.sin(u * 9 + t * 2.2 + x1 * 0.05) * 0.65;
+        const x = x1 + (x2 - x1) * u + n * 0.4;
+        const y = y1 + (y2 - y1) * u + n;
+        if (i === 0) c.moveTo(x, y);
+        else c.lineTo(x, y);
+      }
+      c.stroke();
+    }
+
+    function draw3DAvatarMock(c, x, groundY, pose, t, isNight) {
+      // Soft Three.js-style contact shadow on hand-drawn floor
+      c.save();
+      c.fillStyle = isNight ? 'rgba(0,0,0,0.45)' : 'rgba(15,23,42,0.16)';
+      c.beginPath();
+      c.ellipse(x, groundY + 2, 24, 5, 0, 0, Math.PI * 2);
+      c.fill();
+
+      const breathe = Math.sin(t * 2.4) * 1.6;
+      const seated = pose === 'sit';
+      const hipY = seated ? groundY - 42 : groundY - 64 + (pose === 'jog' ? Math.abs(Math.sin(t * 7)) * -6 : 0);
+      const headY = hipY - 52 + breathe;
+
+      // Legs (shaded 3D athletic pants + red/white sneakers matching alexis.glb)
+      c.lineCap = 'round';
+      c.strokeStyle = '#18181b';
+      c.lineWidth = 9;
+      if (seated) {
+        c.beginPath();
+        c.moveTo(x - 4, hipY); c.lineTo(x + 22, hipY + 4); c.lineTo(x + 22, groundY - 6);
+        c.stroke();
+      } else {
+        const stride = pose === 'jog' ? Math.sin(t * 7) * 16 : 5;
+        c.beginPath();
+        c.moveTo(x - 3, hipY); c.lineTo(x - stride, groundY - 6);
+        c.moveTo(x + 3, hipY); c.lineTo(x + stride, groundY - 6);
+        c.stroke();
+      }
+
+      // Sneakers
+      c.fillStyle = '#b91c1c';
+      const footX = seated ? x + 22 : x + 5;
+      c.beginPath();
+      c.roundRect(footX - 6, groundY - 7, 16, 7, 3);
+      c.fill();
+
+      // Shaded 3D Maroon Sporty Tank Torso (matching alexis.glb)
+      const grad = c.createLinearGradient(x - 14, headY + 18, x + 14, hipY);
+      grad.addColorStop(0, '#991b1b');
+      grad.addColorStop(1, '#450a0a');
+      c.fillStyle = grad;
+      c.beginPath();
+      c.roundRect(x - 11, headY + 18, 22, hipY - (headY + 16), 8);
+      c.fill();
+
+      // 3D Shaded Skin Neck & Head + Dark Bob Hair + White Wired Earphones
+      c.fillStyle = '#d69e7c';
+      c.fillRect(x - 3.5, headY + 11, 7, 9);
+      const headG = c.createRadialGradient(x - 3, headY - 2, 2, x, headY, 13);
+      headG.addColorStop(0, '#ecc0a3');
+      headG.addColorStop(1, '#c58b68');
+      c.fillStyle = headG;
+      c.beginPath();
+      c.arc(x, headY, 11.5, 0, Math.PI * 2);
+      c.fill();
+
+      // Short dark bob hair
+      c.fillStyle = '#1c1917';
+      c.beginPath();
+      c.arc(x, headY - 1.5, 12.2, Math.PI * 0.85, Math.PI * 2.15);
+      c.lineTo(x + 11, headY + 8);
+      c.quadraticCurveTo(x + 8, headY - 4, x, headY - 6);
+      c.quadraticCurveTo(x - 9, headY - 4, x - 11, headY + 8);
+      c.closePath();
+      c.fill();
+
+      // White earphone cord detail
+      c.strokeStyle = 'rgba(255,255,255,0.8)';
+      c.lineWidth = 1.2;
+      c.beginPath();
+      c.moveTo(x + 2, headY + 4);
+      c.quadraticCurveTo(x + 6, headY + 18, x + 3, headY + 28);
+      c.stroke();
+
+      // Articulated 3D Arm + Wristband
+      c.strokeStyle = '#d69e7c';
+      c.lineWidth = 6.5;
+      c.beginPath();
+      if (pose === 'shoot') {
+        const lift = Math.sin(t * 3) * 8;
+        c.moveTo(x + 2, headY + 22);
+        c.lineTo(x + 18, headY + 6 - lift);
+        c.lineTo(x + 26, headY - 14 - lift);
+      } else if (pose === 'sing') {
+        c.moveTo(x + 2, headY + 22);
+        c.lineTo(x + 16, headY + 26);
+        c.lineTo(x + 20, headY + 8);
+      } else {
+        const writeShift = Math.sin(t * 5) * 2.5;
+        c.moveTo(x + 2, headY + 22);
+        c.lineTo(x + 16, headY + 34);
+        c.lineTo(x + 30 + writeShift, headY + 32);
+      }
+      c.stroke();
+      c.restore();
+    }
+
+    function renderStage(now) {
+      const t = now * 0.001;
+      const rect = cv.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      if (cv.width !== Math.round(rect.width * dpr) || cv.height !== Math.round(rect.height * dpr)) {
+        cv.width = Math.round(rect.width * dpr);
+        cv.height = Math.round(rect.height * dpr);
+      }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const slot = getSlotFor(state.dayIdx, state.minutes);
+      const sceneKey = state.forcedScene || slot.sceneKey;
+      const isNight = state.minutes >= 1380 || state.minutes < 400;
+      const ink = isNight ? '#e2e8f0' : '#18181b';
+      const groundY = h * 0.74;
+      const cx = w * 0.44;
+
+      ctx.strokeStyle = ink;
+      // Hand-drawn ground line across entire paper
+      wobbleLine(ctx, 24, groundY, w - 24, groundY, t, 2.2);
+
+      // Scene-specific 2D Hand-Drawn Sketch Props + 3D Character Pose
+      if (sceneKey === 'classroom' || sceneKey === 'library') {
+        // Blackboard or Bookshelf in background
+        ctx.strokeStyle = ink;
+        ctx.strokeRect(cx - 150, groundY - 195, 210, 92);
+        ctx.font = '600 12px monospace';
+        ctx.fillStyle = isNight ? '#94a3b8' : '#52525b';
+        ctx.fillText(sceneKey === 'classroom' ? 'f(x) = ∫ e^(-x²) dx   O(n log n)' : '[计算机图形学] [算法导论] [设计心理学]', cx - 136, groundY - 145);
+
+        draw3DAvatarMock(ctx, cx - 20, groundY, 'sit', t, isNight);
+
+        // Foreground desk & laptop (Layer 3 occlusion!)
+        ctx.fillStyle = isNight ? '#1e293b' : '#ffffff';
+        ctx.fillRect(cx + 2, groundY - 56, 76, 55);
+        ctx.strokeStyle = ink;
+        wobbleLine(ctx, cx - 4, groundY - 56, cx + 84, groundY - 56, t, 2.2);
+        wobbleLine(ctx, cx + 8, groundY - 56, cx + 8, groundY, t, 1.8);
+        wobbleLine(ctx, cx + 74, groundY - 56, cx + 74, groundY, t, 1.8);
+        // Warm desk lamp glow in library
+        if (sceneKey === 'library') {
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.22)';
+          ctx.beginPath();
+          ctx.arc(cx + 52, groundY - 72, 34, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Laptop & coffee cup
+        wobbleLine(ctx, cx + 28, groundY - 58, cx + 54, groundY - 58, t, 2);
+        wobbleLine(ctx, cx + 54, groundY - 58, cx + 62, groundY - 80, t, 2);
+      } else if (sceneKey === 'basketball') {
+        // Classic webg 2D Rack + Hoop + Flying 2D Basketball!
+        wobbleLine(ctx, cx - 150, groundY - 46, cx - 65, groundY - 40, t, 2);
+        wobbleLine(ctx, cx - 144, groundY - 45, cx - 144, groundY, t, 1.6);
+        wobbleLine(ctx, cx - 70, groundY - 40, cx - 70, groundY, t, 1.6);
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.arc(cx - 134 + i * 18, groundY - 53 + i * 1.2, 7.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        // Hoop on right
+        const hx = cx + 210;
+        wobbleLine(ctx, hx + 38, groundY - 210, hx + 38, groundY, t, 2.2);
+        ctx.strokeRect(hx + 16, groundY - 220, 7, 56);
+        ctx.strokeStyle = '#b45309';
+        wobbleLine(ctx, hx - 16, groundY - 175, hx + 16, groundY - 175, t, 2.6);
+        ctx.strokeStyle = ink;
+
+        draw3DAvatarMock(ctx, cx - 20, groundY, 'shoot', t, isNight);
+
+        // Animated parabolic 2D basketball arc
+        const u = (t * 0.65) % 1;
+        const bx = (cx + 8) + (hx - (cx + 8)) * u;
+        const by = (groundY - 135) * (1 - u) + (groundY - 180) * u - Math.sin(u * Math.PI) * 95;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(bx, by, 8.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (sceneKey === 'track') {
+        // Trees & Lakeside bench + jogging
+        wobbleLine(ctx, cx - 180, groundY - 18, w - 80, groundY - 18, t, 1.2);
+        draw3DAvatarMock(ctx, cx, groundY, 'jog', t, isNight);
+      } else if (sceneKey === 'ktv_club') {
+        // Vintage standing mic + floating music notes + KTV screen
+        ctx.strokeRect(cx - 165, groundY - 175, 130, 78);
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText('♪ 只要有你 · KTV ♪', cx - 152, groundY - 132);
+        ctx.strokeStyle = ink;
+        draw3DAvatarMock(ctx, cx + 10, groundY, 'sing', t, isNight);
+        wobbleLine(ctx, cx + 34, groundY - 92, cx + 34, groundY, t, 2);
+        ctx.beginPath();
+        ctx.arc(cx + 34, groundY - 96, 4.5, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        // Dorm / Canteen / Cafe cozy table setup
+        ctx.strokeRect(cx - 140, groundY - 170, 95, 95);
+        wobbleLine(ctx, cx - 92, groundY - 170, cx - 92, groundY - 75, t, 1.4);
+        wobbleLine(ctx, cx - 140, groundY - 122, cx - 45, groundY - 122, t, 1.4);
+        draw3DAvatarMock(ctx, cx, groundY, 'sit', t, isNight);
+        wobbleLine(ctx, cx + 16, groundY - 54, cx + 96, groundY - 54, t, 2.2);
+        wobbleLine(ctx, cx + 26, groundY - 54, cx + 26, groundY, t, 1.8);
+        wobbleLine(ctx, cx + 86, groundY - 54, cx + 86, groundY, t, 1.8);
+        // Steaming bowl / latte cup
+        ctx.strokeStyle = '#f59e0b';
+        ctx.beginPath();
+        ctx.arc(cx + 54, groundY - 62, 9, 0, Math.PI);
+        ctx.stroke();
+      }
+
+      // Cute Hand-Drawn Campus Orange Cat Easter Egg
+      if (state.catNear || sceneKey === 'track') {
+        const catX = cx + 112 + Math.sin(t * 1.5) * 4;
+        ctx.save();
+        ctx.fillStyle = '#fb923c';
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.ellipse(catX, groundY - 9, 12, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(catX - 10, groundY - 16, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Cat tail wagging
+        wobbleLine(ctx, catX + 11, groundY - 11, catX + 21, groundY - 22 + Math.sin(t * 5) * 4, t, 2);
+        ctx.restore();
+      }
+
+      requestAnimationFrame(renderStage);
+    }
+
+    syncUiFromState();
+    requestAnimationFrame(renderStage);
+  </script>
+</body>
+</html>

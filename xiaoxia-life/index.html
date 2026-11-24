@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>林小夏的数字人生 · 校园实时模拟与互动记录</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Balsamiq+Sans:wght@400;700&family=Noto+Sans+SC:wght@400;500;700;900&family=Noto+Serif+SC:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 全屏双栏布局：左侧 3D小夏 × 2D手绘校园世界，右侧真实文档/签到/试卷/图书放大互动窗 -->
+  <div class="app-shell" id="appShell">
+    <!-- ==================== 左侧主舞台：手绘校园世界 + 3D林小夏 ==================== -->
+    <main class="world-stage" id="worldStage">
+      <canvas id="bgSketchCanvas" aria-label="手绘校园建筑与街道背景"></canvas>
+      <canvas id="avatar3dCanvas" aria-hidden="true"></canvas>
+      <canvas id="fgSketchCanvas" aria-hidden="true"></canvas>
+
+      <!-- 左上角：实时校园时钟 + 当前地点/日程 + 四维状态 -->
+      <header class="hud-card panel" id="hudCard">
+        <div class="hud-top">
+          <div class="clock-group">
+            <span class="clock-time" id="clockTime">07:45</span>
+            <div class="clock-meta">
+              <span id="clockDay">周二 · 第8教学周</span>
+              <span id="clockWeather">晴 22°C</span>
+            </div>
+          </div>
+          <button class="sync-pill active" id="btnSyncClock" title="切换系统实时同步 / 时间轴预览">
+            <span class="sync-dot"></span>
+            <span id="syncLabel">实时同步</span>
+          </button>
+        </div>
+
+        <div class="hud-activity">
+          <div class="act-row">
+            <strong id="hudActivityTitle">🏠 梅园402 · 晨起准备出发</strong>
+            <span class="act-place" id="hudLocationTag">梅园 402 宿舍</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="hudProgressFill"></div>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-pill energy">⚡<strong id="statEnergy">88</strong><span>精力</span></div>
+          <div class="stat-pill focus">📖<strong id="statFocus">84</strong><span>专注</span></div>
+          <div class="stat-pill vitality">🏀<strong id="statVitality">80</strong><span>活力</span></div>
+          <div class="stat-pill mood">✨<strong id="statMood">92</strong><span>心情</span></div>
+        </div>
+      </header>
+
+      <!-- 右上角：快捷导航与记录抽屉按钮 -->
+      <nav class="top-toolbar panel" id="topToolbar" aria-label="日程与平台导航">
+        <button class="tool-btn" id="btnJourney" title="一键体验：起床→步行去教学楼→签到→上课">
+          <span>🚶</span><span>起床去上课</span>
+        </button>
+        <div class="tool-div"></div>
+        <button class="tool-btn" id="btnOpenSchedule" title="打开大学真实周课表">
+          <span>📅</span><span>周课表</span>
+        </button>
+        <button class="tool-btn" id="btnOpenLifeLog" title="查看并导出林小夏的真实数字人生记录">
+          <span>📓</span><span>人生记录</span>
+          <span class="badge-count" id="logCountBadge">3</span>
+        </button>
+        <button class="tool-btn active" id="btnToggleSide" title="展开/收起右侧真实放大互动窗">
+          <span>🗂</span><span id="toggleSideText">收起侧窗</span>
+        </button>
+      </nav>
+
+      <!-- 步行状态浮动提示条（步行前往目标建筑时自动显示） -->
+      <div class="walk-banner panel hidden" id="walkBanner">
+        <span class="walk-icon">🚶‍♀️</span>
+        <span id="walkBannerText">林小夏正在从 梅园宿舍 步行前往 逸夫教学楼...</span>
+        <div class="walk-mini-bar"><div class="walk-mini-fill" id="walkProgressFill"></div></div>
+      </div>
+
+      <!-- 进入/走出楼栋手绘转场幕布 -->
+      <div class="scene-transition hidden" id="sceneTransition" aria-live="polite">
+        <div class="trans-card">
+          <div class="trans-icon" id="transIcon">🚪</div>
+          <div class="trans-title" id="transTitle">正在进入 · 梅园 402 宿舍</div>
+          <div class="trans-sub" id="transSub">手绘室内空间展开中...</div>
+        </div>
+      </div>
+
+      <!-- 林小夏头顶碎碎念气泡 -->
+      <div class="speech-bubble panel" id="speechBubble">
+        <span id="speechText">早安！在梅园402宿舍收拾好书包，准备出门走路去逸夫教学楼上《AI Agent 与 Loop》课啦～</span>
+      </div>
+
+      <!-- 底部：室内外切换按钮 + 七大建筑一键步行导航 + 24h 时间轴 -->
+      <footer class="bottom-dock">
+        <div class="dock-top-row">
+          <button class="indoor-pill panel" id="btnToggleIndoor" title="推门进入当前楼栋室内 / 走出回到校园林荫道">
+            <span id="indoorPillIcon">🚪</span>
+            <span id="indoorPillText">进入室内</span>
+          </button>
+        </div>
+
+        <div class="building-nav panel" id="buildingNav" aria-label="七大校园建筑步行导航">
+          <button class="bldg-btn active" data-bldg="dorm"><span>🏠</span>宿舍</button>
+          <button class="bldg-btn" data-bldg="teaching"><span>🏫</span>教学楼</button>
+          <button class="bldg-btn" data-bldg="lab"><span>🧪</span>AI实验室</button>
+          <button class="bldg-btn" data-bldg="library"><span>📚</span>图书馆</button>
+          <button class="bldg-btn" data-bldg="canteen"><span>🍜</span>食堂</button>
+          <button class="bldg-btn" data-bldg="stadium"><span>🏀</span>体育场</button>
+          <button class="bldg-btn" data-bldg="mall"><span>🛍</span>购物中心</button>
+        </div>
+
+        <div class="timeline-bar panel">
+          <span class="tl-label">24h 日程轴</span>
+          <input type="range" id="timeSlider" min="0" max="1439" value="465" aria-label="24小时时间轴">
+          <span class="tl-val" id="sliderTimeVal">07:45</span>
+          <button class="tl-btn" id="btnNow">回到现在</button>
+        </div>
+      </footer>
+    </main>
+
+    <!-- ==================== 右侧放大互动窗：签到纸 / AI教材 / 试卷 / AI实验室 / 图书 / 食堂 / 体育 / 购物 / 人生记录 ==================== -->
+    <aside class="side-workspace" id="sideWorkspace" aria-label="真实互动放大窗口">
+      <div class="side-header">
+        <div class="side-tabs" id="sideTabs">
+          <button class="side-tab active" data-panel="checkin">✍️ 签到纸</button>
+          <button class="side-tab" data-panel="textbook">📖 AI教材</button>
+          <button class="side-tab" data-panel="exam">📝 真实试卷</button>
+          <button class="side-tab" data-panel="lab">🧪 AI实验室</button>
+          <button class="side-tab" data-panel="library">📚 图书自习</button>
+          <button class="side-tab" data-panel="canteen">🍜 食堂</button>
+          <button class="side-tab" data-panel="stadium">🏀 体育场</button>
+          <button class="side-tab" data-panel="mall">🛍 购物</button>
+          <button class="side-tab" data-panel="lifelog">📓 人生记录</button>
+        </div>
+      </div>
+
+      <div class="side-body" id="sideBody">
+        <!-- 动态渲染当前活动对应的真实高保真放大文档/互动工作台 -->
+      </div>
+    </aside>
+  </div>
+
+  <!-- 大学真实周课表弹窗抽屉 -->
+  <div class="modal-backdrop hidden" id="scheduleModal">
+    <div class="modal-card schedule-modal-card">
+      <div class="modal-head">
+        <div>
+          <h2>📅 林小夏的大学周课表 · 人工智能与智能体工程（大二）</h2>
+          <p class="modal-sub">点击任意课程/活动块，林小夏将从当前位置真实步行前往对应建筑并打开对应的放大互动窗</p>
+        </div>
+        <button class="close-btn" id="btnCloseSchedule">✕</button>
+      </div>
+      <div class="schedule-table-wrap">
+        <table class="schedule-table" id="scheduleTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 隐藏本地文档导入（支持用户在教材/图书窗口导入真实学习资料） -->
+  <input type="file" id="docFileInput" accept=".txt,.md,.markdown" hidden>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.min.js",
+      "three/addons/": "./vendor/three/"
+    }
+  }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
